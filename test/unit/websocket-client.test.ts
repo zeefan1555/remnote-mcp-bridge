@@ -33,6 +33,7 @@ describe('WebSocketClient', () => {
     client = new WebSocketClient({
       url: 'ws://localhost:3002',
       pluginVersion: '0.5.0',
+      capabilities: ['media.images.v1'],
       maxReconnectAttempts: 3,
       initialReconnectDelay: 100,
       maxReconnectDelay: 1000,
@@ -114,7 +115,11 @@ describe('WebSocketClient', () => {
       expect(helloMessage).toBeDefined();
 
       const parsed = JSON.parse(helloMessage!);
-      expect(parsed).toEqual({ type: 'hello', version: '0.5.0' });
+      expect(parsed).toEqual({
+        type: 'hello',
+        version: '0.5.0',
+        capabilities: ['media.images.v1'],
+      });
     });
 
     it('should send hello message on reconnect', async () => {
