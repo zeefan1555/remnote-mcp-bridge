@@ -34,7 +34,7 @@
     "@eslint/js": "^10.0.1",
     "@pmmmwh/react-refresh-webpack-plugin": "^0.6.2",
     "@tailwindcss/postcss": "^4.3.1",
-    "@types/node": "^25.9.3",
+    "@types/node": "^26.1.1",
     "@types/react": "^17.0.91",
     "@types/react-dom": "^17.0.26",
     "@typescript-eslint/eslint-plugin": "^8.61.0",
