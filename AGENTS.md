@@ -64,6 +64,9 @@ Before changing `search`/`read` output semantics, read:
 
 ## Development and Verification
 
+For maintainer review of one or more bridge/server pull requests, follow
+`docs/workflows/pr-validation-and-adoption.md` before modifying or merging the contribution.
+
 If Node/npm is unavailable in shell, run:
 
 ```bash

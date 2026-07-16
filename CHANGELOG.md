@@ -9,6 +9,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add an agent-agnostic maintainer workflow for evaluating, adapting, verifying, and merging single-repo or paired
+  bridge/server pull requests with contributor attribution.
 - Add support for scoped search in `search` action via `parentRemId`, enabling queries limited to a specific Rem's subtree. Contributed by Twb06.
 - Incorporate `parentRemId` into search cursor snapshots and hashing to enforce scope safety and readability during cursor pagination.
 - Add `set_property` bridge action for exact-ID tag/table property writes, including text, Rem-reference/select-option,

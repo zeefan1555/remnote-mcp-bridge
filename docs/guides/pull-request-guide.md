@@ -12,6 +12,9 @@ When a feature or protocol change affects more than one repo, the pull requests 
 Use the [repository pull request template](../../.github/pull_request_template.md) for the submission checklist.
 This guide explains the cross-repo policy behind that checklist.
 
+Maintainers evaluating and adopting a submitted change should follow the
+[Pull Request Validation and Adoption Workflow](../workflows/pr-validation-and-adoption.md).
+
 ## Cross-Repo Parity
 
 If you change the shared bridge protocol, action surface, or behavior expected by consumers, keep MCP tools and the
