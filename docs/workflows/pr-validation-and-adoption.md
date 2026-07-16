@@ -305,6 +305,7 @@ The final report should include:
 - live integration results or an explicit reason they were not run
 - merge order and compatibility assumptions
 - remaining risks, follow-ups, and pull request closure state
+- workflow retrospective and any proposed reusable process improvements
 
 ## Merge-Ready Definition
 
@@ -321,3 +322,47 @@ A contribution is merge-ready only when:
 - mixed-version behavior and merge order are understood
 - final pull request heads and comments were refreshed
 - no unrelated worktree changes were modified
+
+## 11. Retrospect and Improve the Workflow
+
+After every terminal outcome, including merge, rejection, or deferral, review the actual validation session for ways to
+make future pull request processing safer, clearer, or more efficient.
+
+Consider:
+
+- steps that caused avoidable delay or rework
+- missing information, checks, tools, or authority gates
+- defects or review findings that the workflow should have prompted earlier
+- redundant, unclear, or incorrectly ordered steps
+- commands, paths, or repository policies that have become stale
+- opportunities to simplify the workflow without weakening validation
+
+Only add lessons that are independent of the reviewed pull request's content and reusable for future pull requests in
+either repository. Do not add feature names, pull request numbers or URLs, API-specific findings, implementation
+details, or one-off workarounds to this workflow.
+
+Classify each lesson before proposing a change:
+
+- **Reusable process lesson:** propose an update to this canonical workflow.
+- **Repository-specific lesson:** propose an update to the affected repository's instructions or documentation.
+- **Pull-request-specific lesson:** keep it in the pull request report or a follow-up issue.
+- **Transient event:** do not preserve it unless it exposes a recurring process risk.
+
+A workflow update should address either a generally reusable improvement demonstrated by the session or a serious
+process gap that could permit an incorrect merge, lost attribution, unsafe operation, or incomplete verification. The
+workflow may be simplified or have obsolete steps removed; improvement does not mean accumulating more checklist
+items.
+
+Report the retrospective in this form:
+
+```text
+Workflow retrospective:
+Observed friction:
+Reusable lesson:
+Proposed workflow change:
+Expected benefit:
+Decision: no change needed | approval requested
+```
+
+Do not modify this workflow automatically. Present the evidence and proposed process-level change, then wait for
+explicit approval. A workflow-only follow-up does not recursively trigger another retrospective.
