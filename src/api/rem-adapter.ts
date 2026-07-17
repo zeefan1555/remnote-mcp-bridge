@@ -104,6 +104,7 @@ export interface GetMediaLocatorParams {
 }
 
 export interface MediaLocatorResult extends Omit<RemMediaMetadata, 'source'> {
+  remId: string;
   source: 'remnote_managed_local';
   localToken: string;
 }
@@ -761,28 +762,27 @@ export class RemAdapter {
       throw new Error('Unsupported media locator: image is not RemNote-managed local media');
     }
 
-    const token = locator.slice(LOCAL_FILE_PREFIX.length);
+    const encodedToken = locator.slice(LOCAL_FILE_PREFIX.length);
     let decoded: string;
     try {
-      decoded = decodeURIComponent(token);
+      decoded = decodeURIComponent(encodedToken);
     } catch {
       throw new Error('Media path traversal rejected: invalid local media token encoding');
     }
 
     if (
-      !token ||
-      decoded !== token ||
-      token.normalize('NFC') !== token ||
-      token === '.' ||
-      token === '..' ||
-      token.includes('/') ||
-      token.includes('\\') ||
-      token.includes('\u0000')
+      !decoded ||
+      decoded.normalize('NFC') !== decoded ||
+      decoded === '.' ||
+      decoded === '..' ||
+      decoded.includes('/') ||
+      decoded.includes('\\') ||
+      decoded.includes('\u0000')
     ) {
       throw new Error('Media path traversal rejected: local media token must be a basename');
     }
 
-    return token;
+    return decoded;
   }
 
   private extractMediaFromField(
@@ -3144,6 +3144,7 @@ export class RemAdapter {
 
     return {
       ...match.metadata,
+      remId,
       source: 'remnote_managed_local',
       localToken: this.getLocalToken(match.locator),
     };

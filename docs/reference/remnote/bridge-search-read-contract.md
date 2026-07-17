@@ -50,8 +50,8 @@ contract keeps iterations safe and predictable.
   `imgId`, title, dimensions, MIME hint, and source metadata.
 - Consumers must retrieve by `remId + field + mediaId`; array position alone is not an identity.
 - The capability-gated `get_media_locator` action re-reads the Rem and recomputes the ID. It rejects stale IDs,
-  external URLs, and unsafe local tokens, and returns only a validated RemNote-managed filename token—not an absolute
-  filesystem path or image bytes.
+  external URLs, and unsafe local tokens, and returns the owning `remId` plus a decoded, validated RemNote-managed
+  filename token—not an absolute filesystem path or image bytes.
 - Bridges supporting this contract advertise `media.images.v1` in the WebSocket hello message.
 
 ### `parentRemId` (optional)

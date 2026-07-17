@@ -1750,6 +1750,7 @@ describe('RemAdapter', () => {
         mediaId: read.media![0].mediaId,
       });
       expect(locator.localToken).toBe('opaque-image.png');
+      expect(locator.remId).toBe(rem._id);
       expect(locator.source).toBe('remnote_managed_local');
       expect(locator).not.toHaveProperty('path');
 
@@ -1794,6 +1795,7 @@ describe('RemAdapter', () => {
       '..',
       '',
       'e\u0301.png',
+      '%65%CC%81.png',
     ])('rejects unsafe managed local token %j', async (token) => {
       const remId = 'media_unsafe';
       const rem = plugin.addTestRem(remId, '');
@@ -1813,6 +1815,26 @@ describe('RemAdapter', () => {
           mediaId: read.media![0].mediaId,
         })
       ).rejects.toThrow('Media path traversal rejected');
+    });
+
+    it('decodes safe percent-encoded managed local filenames', async () => {
+      const rem = plugin.addTestRem('media_encoded_filename', '');
+      rem.text = [
+        { i: 'i', imgId: 'encoded-image', url: '%LOCAL_FILE%Screenshot%202026.png' },
+      ] as unknown as string[];
+      const read = await adapter.readNote({
+        remId: rem._id,
+        contentMode: 'none',
+        includeMediaMetadata: true,
+      });
+
+      const locator = await adapter.getMediaLocator({
+        remId: rem._id,
+        field: 'text',
+        mediaId: read.media![0].mediaId,
+      });
+
+      expect(locator.localToken).toBe('Screenshot 2026.png');
     });
 
     it('rejects external URLs when resolving a media locator', async () => {

@@ -30,6 +30,7 @@ discontinued; maintained CLI code lives in `remnote-mcp-server/src/remnote-cli/`
 - `search`
 - `search_by_tag`
 - `read_note`
+- `get_media_locator` (capability-gated RemNote-managed image token resolution)
 - `list_children`
 - `move_note`
 - `update_note`
