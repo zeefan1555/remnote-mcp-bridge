@@ -22,6 +22,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Add scoped bridge diagnostics for `insert_children` writes so live RemNote hangs can be isolated to the exact SDK
   checkpoint.
 
+### Changed
+
+- Validate CI on Node.js `22.13.0` and `24` through shared workflow `v0.4.0`.
+
 ### Fixed
 
 - Stop scoped search subtree validation early when a cyclic parent chain is encountered.
