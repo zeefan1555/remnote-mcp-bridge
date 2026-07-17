@@ -109,9 +109,7 @@ export interface UpdateTagsParams {
 }
 
 export type SetPropertyValue =
-  | { kind: 'text'; text: string }
-  | { kind: 'rem_reference'; remId: string }
-  | { kind: 'clear' };
+  { kind: 'text'; text: string } | { kind: 'rem_reference'; remId: string } | { kind: 'clear' };
 
 export interface SetPropertyParams {
   remId: string;
@@ -305,19 +303,11 @@ export interface SetDocumentStatusResult {
 }
 
 export type RemClassification =
-  | 'document'
-  | 'dailyDocument'
-  | 'concept'
-  | 'descriptor'
-  | 'portal'
-  | 'text';
+  'document' | 'dailyDocument' | 'concept' | 'descriptor' | 'portal' | 'text';
 
 export type CardDirection = 'forward' | 'reverse' | 'bidirectional';
 export type SearchByTagContextReason =
-  | 'ancestor-document'
-  | 'ancestor-concept'
-  | 'ancestor-context'
-  | 'self';
+  'ancestor-document' | 'ancestor-concept' | 'ancestor-context' | 'self';
 
 /** Default number of search results when no limit is specified. */
 const DEFAULT_SEARCH_LIMIT = 50;

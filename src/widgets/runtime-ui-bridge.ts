@@ -91,18 +91,14 @@ export function deserializeBridgeRuntimeSnapshot(
 ): BridgeRuntimeSnapshot {
   return {
     ...snapshot,
-    logs: snapshot.logs.map(
-      (entry): LogEntry => ({
-        ...entry,
-        timestamp: new Date(entry.timestamp),
-      })
-    ),
-    history: snapshot.history.map(
-      (entry): HistoryEntry => ({
-        ...entry,
-        timestamp: new Date(entry.timestamp),
-      })
-    ),
+    logs: snapshot.logs.map((entry): LogEntry => ({
+      ...entry,
+      timestamp: new Date(entry.timestamp),
+    })),
+    history: snapshot.history.map((entry): HistoryEntry => ({
+      ...entry,
+      timestamp: new Date(entry.timestamp),
+    })),
   };
 }
 
