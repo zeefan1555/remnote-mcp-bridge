@@ -1,7 +1,7 @@
 declare const __PLUGIN_VERSION__: string;
 
 import { FocusEvents, SidebarEvents, type ReactRNPlugin, WindowEvents } from '@remnote/plugin-sdk';
-import { RemAdapter } from '../api/rem-adapter';
+import { MEDIA_CAPABILITY, RemAdapter } from '../api/rem-adapter';
 import {
   type BridgeRequest,
   type CompanionInfo,
@@ -241,6 +241,7 @@ class BridgeRuntimeController implements BridgeRuntime {
     return new WebSocketClient({
       url,
       pluginVersion: __PLUGIN_VERSION__,
+      capabilities: [MEDIA_CAPABILITY],
       maxReconnectAttempts: 10,
       initialReconnectDelay: 1000,
       maxReconnectDelay: 30000,
@@ -347,6 +348,14 @@ class BridgeRuntimeController implements BridgeRuntime {
         return result;
       }
 
+      case 'get_media_locator': {
+        return await this.adapter.getMediaLocator({
+          remId: payload.remId as string,
+          field: payload.field as 'text' | 'backText',
+          mediaId: payload.mediaId as string,
+        });
+      }
+
       case 'search_by_tag': {
         const result = await this.adapter.searchByTag({
           tagRemId: payload.tagRemId as string,
@@ -369,6 +378,7 @@ class BridgeRuntimeController implements BridgeRuntime {
       case 'read_note': {
         const result = await this.adapter.readNote({
           remId: payload.remId as string,
+          includeMediaMetadata: payload.includeMediaMetadata as boolean | undefined,
           depth: payload.depth as number | undefined,
           contentMode: payload.contentMode as 'none' | 'markdown' | 'structured' | undefined,
           childLimit: payload.childLimit as number | undefined,

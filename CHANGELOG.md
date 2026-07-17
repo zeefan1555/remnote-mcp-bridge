@@ -9,6 +9,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add opt-in ordered image metadata to `read_note` via `includeMediaMetadata` and a capability-gated
+  `get_media_locator` action for resolving stable media IDs to decoded, validated RemNote-managed local filename
+  tokens. Contributed by Charles (`@charleseze356`).
+- Advertise the `media.images.v1` bridge capability during WebSocket negotiation. Contributed by Charles
+  (`@charleseze356`).
 - Add an agent-agnostic maintainer workflow for evaluating, adapting, verifying, and merging single-repo or paired
   bridge/server pull requests with contributor attribution.
 - Add support for scoped search in `search` action via `parentRemId`, enabling queries limited to a specific Rem's subtree. Contributed by Twb06.

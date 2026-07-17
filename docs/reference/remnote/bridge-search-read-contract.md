@@ -41,6 +41,19 @@ contract keeps iterations safe and predictable.
   graph traversal instead of parsing markdown.
 - In `contentStructured`, each child node exposes its own `inlineRefs` when present.
 
+### `media` (optional, read only)
+
+- `read_note` returns `media` only when `includeMediaMetadata` is `true`.
+- Items describe root-Rem images in deterministic field order: `text`, then `backText`, preserving rich-text order
+  within each field.
+- Each item includes a stable `mediaId`, `kind: "image"`, `field`, `elementIndex`, and `imageIndex`, plus available
+  `imgId`, title, dimensions, MIME hint, and source metadata.
+- Consumers must retrieve by `remId + field + mediaId`; array position alone is not an identity.
+- The capability-gated `get_media_locator` action re-reads the Rem and recomputes the ID. It rejects stale IDs,
+  external URLs, and unsafe local tokens, and returns the owning `remId` plus a decoded, validated RemNote-managed
+  filename token—not an absolute filesystem path or image bytes.
+- Bridges supporting this contract advertise `media.images.v1` in the WebSocket hello message.
+
 ### `parentRemId` (optional)
 
 - `parentRemId` is the Rem ID of the note's direct parent.
@@ -178,7 +191,7 @@ The adapter-level renderer should preserve meaning over exact visual fidelity:
 - Initial search captures an ordered snapshot of up to 1000 SDK results, deduplicates by `remId`, then returns the
   requested page size. Page content is rendered only for the current page.
 - If the snapshot reaches the 1000-result cap, `truncated` is `true` with `truncationReason:
-  "cursor_snapshot_limit"`.
+"cursor_snapshot_limit"`.
 - Search may still return fewer results than requested due to SDK-side internal limits.
 
 ## Search-by-tag behavior contract
@@ -216,7 +229,7 @@ The adapter-level renderer should preserve meaning over exact visual fidelity:
 - The bridge captures a short-lived ordered snapshot from up to 1000 direct tagged matches. Page content is rendered
   only for the current page.
 - If the snapshot reaches the 1000-result cap, `truncated` is `true` with `truncationReason:
-  "cursor_snapshot_limit"`.
+"cursor_snapshot_limit"`.
 - `limit` applies to top-level results. In `context` mode, `matchedRems` contains direct matches observed for each
   returned context result while building the snapshot.
 - Results are sorted with the same type-priority ordering as `remnote_search`, applied to the top-level result Rems.

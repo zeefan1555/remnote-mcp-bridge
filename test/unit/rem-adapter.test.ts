@@ -1641,6 +1641,222 @@ describe('RemAdapter', () => {
   });
 
   describe('readNote', () => {
+    it('returns ordered root media metadata from text and backText when requested', async () => {
+      const rem = plugin.addTestRem('media_order', '');
+      rem.text = [
+        'before',
+        {
+          i: 'i',
+          imgId: 'front-image',
+          url: '%LOCAL_FILE%front.png',
+          title: 'Front',
+          width: 640,
+          height: 480,
+        },
+        { i: 'i', imgId: 'front-second', url: '%LOCAL_FILE%second.webp' },
+      ] as unknown as string[];
+      rem.backText = [
+        { i: 'i', imgId: 'back-image', url: '%LOCAL_FILE%back.jpg' },
+      ] as unknown as string[];
+
+      const result = await adapter.readNote({
+        remId: 'media_order',
+        contentMode: 'none',
+        includeMediaMetadata: true,
+      });
+
+      expect(result.media).toEqual([
+        {
+          mediaId: expect.stringMatching(/^media_[0-9a-f]{32}$/),
+          kind: 'image',
+          field: 'text',
+          elementIndex: 1,
+          imageIndex: 0,
+          imgId: 'front-image',
+          title: 'Front',
+          dimensions: { width: 640, height: 480 },
+          mimeType: 'image/png',
+          source: 'remnote_managed_local',
+        },
+        {
+          mediaId: expect.stringMatching(/^media_[0-9a-f]{32}$/),
+          kind: 'image',
+          field: 'text',
+          elementIndex: 2,
+          imageIndex: 1,
+          imgId: 'front-second',
+          mimeType: 'image/webp',
+          source: 'remnote_managed_local',
+        },
+        {
+          mediaId: expect.stringMatching(/^media_[0-9a-f]{32}$/),
+          kind: 'image',
+          field: 'backText',
+          elementIndex: 0,
+          imageIndex: 0,
+          imgId: 'back-image',
+          mimeType: 'image/jpeg',
+          source: 'remnote_managed_local',
+        },
+      ]);
+    });
+
+    it('keeps media IDs stable after unrelated rich-text insertion', async () => {
+      const rem = plugin.addTestRem('media_stable', '');
+      const image = { i: 'i', imgId: 'stable-image', url: '%LOCAL_FILE%stable.png' };
+      rem.text = [image] as unknown as string[];
+      const first = await adapter.readNote({
+        remId: rem._id,
+        contentMode: 'none',
+        includeMediaMetadata: true,
+      });
+
+      rem.text = ['unrelated', image] as unknown as string[];
+      const second = await adapter.readNote({
+        remId: rem._id,
+        contentMode: 'none',
+        includeMediaMetadata: true,
+      });
+
+      expect(second.media?.[0].mediaId).toBe(first.media?.[0].mediaId);
+      expect(second.media?.[0].elementIndex).toBe(1);
+    });
+
+    it('omits media metadata by default', async () => {
+      const rem = plugin.addTestRem('media_default_off', '');
+      rem.text = [
+        { i: 'i', imgId: 'hidden', url: '%LOCAL_FILE%hidden.png' },
+      ] as unknown as string[];
+
+      const result = await adapter.readNote({ remId: rem._id, contentMode: 'none' });
+
+      expect(result.media).toBeUndefined();
+    });
+
+    it('recomputes a managed local locator and rejects stale media IDs', async () => {
+      const rem = plugin.addTestRem('media_locator', '');
+      rem.text = [
+        { i: 'i', imgId: 'locator-image', url: '%LOCAL_FILE%opaque-image.png' },
+      ] as unknown as string[];
+      const read = await adapter.readNote({
+        remId: rem._id,
+        contentMode: 'none',
+        includeMediaMetadata: true,
+      });
+
+      const locator = await adapter.getMediaLocator({
+        remId: rem._id,
+        field: 'text',
+        mediaId: read.media![0].mediaId,
+      });
+      expect(locator.localToken).toBe('opaque-image.png');
+      expect(locator.remId).toBe(rem._id);
+      expect(locator.source).toBe('remnote_managed_local');
+      expect(locator).not.toHaveProperty('path');
+
+      rem.text = [];
+      await expect(
+        adapter.getMediaLocator({
+          remId: rem._id,
+          field: 'text',
+          mediaId: read.media![0].mediaId,
+        })
+      ).rejects.toThrow('Stale or missing media ID');
+    });
+
+    it('rejects traversal in managed local media tokens', async () => {
+      const rem = plugin.addTestRem('media_traversal', '');
+      rem.text = [
+        { i: 'i', imgId: 'bad-image', url: '%LOCAL_FILE%../secret.png' },
+      ] as unknown as string[];
+      const read = await adapter.readNote({
+        remId: rem._id,
+        contentMode: 'none',
+        includeMediaMetadata: true,
+      });
+
+      await expect(
+        adapter.getMediaLocator({
+          remId: rem._id,
+          field: 'text',
+          mediaId: read.media![0].mediaId,
+        })
+      ).rejects.toThrow('Media path traversal rejected');
+    });
+
+    it.each([
+      '../secret.png',
+      '..\\secret.png',
+      '%2Fsecret.png',
+      '%5Csecret.png',
+      '%00secret.png',
+      '%E0%A4%A',
+      '.',
+      '..',
+      '',
+      'e\u0301.png',
+      '%65%CC%81.png',
+    ])('rejects unsafe managed local token %j', async (token) => {
+      const remId = 'media_unsafe';
+      const rem = plugin.addTestRem(remId, '');
+      rem.text = [
+        { i: 'i', imgId: `unsafe-${token}`, url: `%LOCAL_FILE%${token}` },
+      ] as unknown as string[];
+      const read = await adapter.readNote({
+        remId,
+        contentMode: 'none',
+        includeMediaMetadata: true,
+      });
+
+      await expect(
+        adapter.getMediaLocator({
+          remId,
+          field: 'text',
+          mediaId: read.media![0].mediaId,
+        })
+      ).rejects.toThrow('Media path traversal rejected');
+    });
+
+    it('decodes safe percent-encoded managed local filenames', async () => {
+      const rem = plugin.addTestRem('media_encoded_filename', '');
+      rem.text = [
+        { i: 'i', imgId: 'encoded-image', url: '%LOCAL_FILE%Screenshot%202026.png' },
+      ] as unknown as string[];
+      const read = await adapter.readNote({
+        remId: rem._id,
+        contentMode: 'none',
+        includeMediaMetadata: true,
+      });
+
+      const locator = await adapter.getMediaLocator({
+        remId: rem._id,
+        field: 'text',
+        mediaId: read.media![0].mediaId,
+      });
+
+      expect(locator.localToken).toBe('Screenshot 2026.png');
+    });
+
+    it('rejects external URLs when resolving a media locator', async () => {
+      const rem = plugin.addTestRem('media_external', '');
+      rem.text = [
+        { i: 'i', imgId: 'external-image', url: 'https://example.test/image.png' },
+      ] as unknown as string[];
+      const read = await adapter.readNote({
+        remId: rem._id,
+        contentMode: 'none',
+        includeMediaMetadata: true,
+      });
+
+      await expect(
+        adapter.getMediaLocator({
+          remId: rem._id,
+          field: 'text',
+          mediaId: read.media![0].mediaId,
+        })
+      ).rejects.toThrow('Unsupported media locator');
+    });
+
     it('should read a note by ID with headline', async () => {
       plugin.addTestRem('read_test', 'Test content');
 

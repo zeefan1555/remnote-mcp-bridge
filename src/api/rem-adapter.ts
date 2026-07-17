@@ -74,6 +74,39 @@ export interface ReadNoteParams {
   maxContentLength?: number;
   ancestorDepth?: number;
   view?: ResultView;
+  includeMediaMetadata?: boolean;
+}
+
+export type MediaField = 'text' | 'backText';
+
+export interface ImageDimensions {
+  width: number;
+  height: number;
+}
+
+export interface RemMediaMetadata {
+  mediaId: string;
+  kind: 'image';
+  field: MediaField;
+  elementIndex: number;
+  imageIndex: number;
+  imgId?: string;
+  title?: string;
+  dimensions?: ImageDimensions;
+  mimeType?: string;
+  source?: 'remnote_managed_local';
+}
+
+export interface GetMediaLocatorParams {
+  remId: string;
+  field: MediaField;
+  mediaId: string;
+}
+
+export interface MediaLocatorResult extends Omit<RemMediaMetadata, 'source'> {
+  remId: string;
+  source: 'remnote_managed_local';
+  localToken: string;
 }
 
 export interface UpdateNoteParams {
@@ -456,6 +489,8 @@ const CONTENT_MODES: readonly ContentMode[] = ['none', 'markdown', 'structured']
 const RESULT_VIEWS: readonly ResultView[] = ['compact', 'standard', 'full'];
 const ID_REFERENCE_TOKEN_PATTERN = /\[\[id:([^\]\n]*)\]\]/g;
 const ID_REFERENCE_PLACEHOLDER_PREFIX = 'rnbridgeidrefplaceholder';
+const LOCAL_FILE_PREFIX = '%LOCAL_FILE%';
+export const MEDIA_CAPABILITY = 'media.images.v1';
 
 export class RemAdapter {
   private settings: AutomationBridgeSettings;
@@ -657,6 +692,141 @@ export class RemAdapter {
     visitedIds?: Set<string>
   ): Promise<string> {
     return (await this.renderRichText(richText, visitedIds)).text;
+  }
+
+  private stableMediaId(remId: string, field: MediaField, identity: string): string {
+    const value = `${remId}\u0000${field}\u0000${identity}`;
+    const seeds = [0x811c9dc5, 0x9e3779b9, 0x85ebca6b, 0xc2b2ae35];
+    const digest = seeds
+      .map((seed) => {
+        let hash = seed;
+        for (let index = 0; index < value.length; index += 1) {
+          hash ^= value.charCodeAt(index);
+          hash = Math.imul(hash, 0x01000193);
+        }
+        return (hash >>> 0).toString(16).padStart(8, '0');
+      })
+      .join('');
+    return `media_${digest}`;
+  }
+
+  private inferImageMimeType(locator: string | undefined): string | undefined {
+    const extension = locator
+      ?.split(/[?#]/, 1)[0]
+      .match(/\.([^.]+)$/)?.[1]
+      ?.toLowerCase();
+    switch (extension) {
+      case 'png':
+        return 'image/png';
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'gif':
+        return 'image/gif';
+      case 'webp':
+        return 'image/webp';
+      default:
+        return undefined;
+    }
+  }
+
+  private getImageDimensions(element: Record<string, unknown>): ImageDimensions | undefined {
+    const dimensions =
+      typeof element.dimensions === 'object' && element.dimensions !== null
+        ? (element.dimensions as Record<string, unknown>)
+        : element;
+    const width = dimensions.width;
+    const height = dimensions.height;
+    return typeof width === 'number' &&
+      Number.isFinite(width) &&
+      width > 0 &&
+      typeof height === 'number' &&
+      Number.isFinite(height) &&
+      height > 0
+      ? { width, height }
+      : undefined;
+  }
+
+  private getLocalToken(locator: string): string {
+    if (!locator.startsWith(LOCAL_FILE_PREFIX)) {
+      throw new Error('Unsupported media locator: image is not RemNote-managed local media');
+    }
+
+    const encodedToken = locator.slice(LOCAL_FILE_PREFIX.length);
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(encodedToken);
+    } catch {
+      throw new Error('Media path traversal rejected: invalid local media token encoding');
+    }
+
+    if (
+      !decoded ||
+      decoded.normalize('NFC') !== decoded ||
+      decoded === '.' ||
+      decoded === '..' ||
+      decoded.includes('/') ||
+      decoded.includes('\\') ||
+      decoded.includes('\u0000')
+    ) {
+      throw new Error('Media path traversal rejected: local media token must be a basename');
+    }
+
+    return decoded;
+  }
+
+  private extractMediaFromField(
+    remId: string,
+    field: MediaField,
+    richText: RichTextInterface | undefined
+  ): Array<{ metadata: RemMediaMetadata; locator?: string }> {
+    if (!Array.isArray(richText)) return [];
+
+    const records: Array<{ metadata: RemMediaMetadata; locator?: string }> = [];
+    let imageIndex = 0;
+    richText.forEach((element, elementIndex) => {
+      if (!element || typeof element !== 'object') return;
+      const image = element as Record<string, unknown>;
+      if (image.i !== 'i') return;
+
+      const locator = typeof image.url === 'string' ? image.url : undefined;
+      const imgId = typeof image.imgId === 'string' && image.imgId ? image.imgId : undefined;
+      const identity = imgId ?? locator;
+      if (!identity) return;
+
+      const title = typeof image.title === 'string' && image.title ? image.title : undefined;
+      const dimensions = this.getImageDimensions(image);
+      const mimeType = this.inferImageMimeType(locator);
+      records.push({
+        metadata: {
+          mediaId: this.stableMediaId(remId, field, identity),
+          kind: 'image',
+          field,
+          elementIndex,
+          imageIndex,
+          ...(imgId ? { imgId } : {}),
+          ...(title ? { title } : {}),
+          ...(dimensions ? { dimensions } : {}),
+          ...(mimeType ? { mimeType } : {}),
+          ...(locator?.startsWith(LOCAL_FILE_PREFIX)
+            ? { source: 'remnote_managed_local' as const }
+            : {}),
+        },
+        locator,
+      });
+      imageIndex += 1;
+    });
+    return records;
+  }
+
+  private extractRootMedia(rem: PluginRem): Array<{
+    metadata: RemMediaMetadata;
+    locator?: string;
+  }> {
+    return [
+      ...this.extractMediaFromField(rem._id, 'text', rem.text),
+      ...this.extractMediaFromField(rem._id, 'backText', rem.backText),
+    ];
   }
 
   /**
@@ -2851,6 +3021,7 @@ export class RemAdapter {
     content?: string;
     contentStructured?: StructuredContentNode[];
     contentProperties?: ContentProperties;
+    media?: RemMediaMetadata[];
   }> {
     const depth = params.depth ?? DEFAULT_DEPTH;
     const contentMode = this.parseContentMode(
@@ -2891,6 +3062,9 @@ export class RemAdapter {
     ]);
 
     const headline = this.formatHeadline(title, detail, remType);
+    const media = params.includeMediaMetadata
+      ? this.extractRootMedia(rem).map((record) => record.metadata)
+      : undefined;
 
     let content: string | undefined;
     let contentStructured: StructuredContentNode[] | undefined;
@@ -2935,6 +3109,34 @@ export class RemAdapter {
       ...(content !== undefined ? { content } : {}),
       ...(contentStructured ? { contentStructured } : {}),
       ...(contentProperties ? { contentProperties } : {}),
+      ...(media ? { media } : {}),
+    };
+  }
+
+  async getMediaLocator(params: GetMediaLocatorParams): Promise<MediaLocatorResult> {
+    const remId = this.requireString(params.remId, 'remId');
+    const mediaId = this.requireString(params.mediaId, 'mediaId');
+    if (params.field !== 'text' && params.field !== 'backText') {
+      throw new Error('field must be either text or backText');
+    }
+
+    const rem = await this.plugin.rem.findOne(remId);
+    if (!rem) {
+      throw new Error(`Note not found: ${remId}`);
+    }
+
+    const match = this.extractMediaFromField(remId, params.field, rem[params.field]).find(
+      (record) => record.metadata.mediaId === mediaId
+    );
+    if (!match?.locator) {
+      throw new Error(`Stale or missing media ID: ${mediaId}`);
+    }
+
+    return {
+      ...match.metadata,
+      remId,
+      source: 'remnote_managed_local',
+      localToken: this.getLocalToken(match.locator),
     };
   }
 
@@ -3531,6 +3733,7 @@ export class RemAdapter {
     knowledgeBaseId?: string;
     acceptWriteOperations: boolean;
     acceptReplaceOperation: boolean;
+    capabilities: string[];
   }> {
     return {
       connected: true,
@@ -3538,6 +3741,7 @@ export class RemAdapter {
       knowledgeBaseId: undefined,
       acceptWriteOperations: this.settings.acceptWriteOperations,
       acceptReplaceOperation: this.settings.acceptReplaceOperation,
+      capabilities: [MEDIA_CAPABILITY],
     };
   }
 }

@@ -35,6 +35,7 @@ export interface BridgeResponse {
 export interface HelloMessage {
   type: 'hello';
   version: string;
+  capabilities?: string[];
 }
 
 export interface CompanionInfo {
@@ -51,6 +52,7 @@ export interface CompanionInfoMessage {
 export interface WebSocketClientConfig {
   url: string;
   pluginVersion: string;
+  capabilities?: string[];
   maxReconnectAttempts?: number;
   initialReconnectDelay?: number;
   maxReconnectDelay?: number;
@@ -90,6 +92,7 @@ export class WebSocketClient {
     this.config = {
       url: config.url,
       pluginVersion: config.pluginVersion,
+      capabilities: config.capabilities ?? [],
       maxReconnectAttempts: config.maxReconnectAttempts ?? 10,
       initialReconnectDelay: config.initialReconnectDelay ?? 1000,
       maxReconnectDelay: config.maxReconnectDelay ?? 30000,
@@ -132,6 +135,7 @@ export class WebSocketClient {
     const hello: HelloMessage = {
       type: 'hello',
       version: this.config.pluginVersion,
+      ...(this.config.capabilities.length > 0 ? { capabilities: this.config.capabilities } : {}),
     };
     try {
       this.ws?.send(JSON.stringify(hello));
