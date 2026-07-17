@@ -12,6 +12,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Add opt-in ordered image metadata to `read_note` via `includeMediaMetadata` and a capability-gated
   `get_media_locator` action for resolving stable media IDs to validated RemNote-managed local filename tokens.
 - Advertise the `media.images.v1` bridge capability during WebSocket negotiation.
+- Add an agent-agnostic maintainer workflow for evaluating, adapting, verifying, and merging single-repo or paired
+  bridge/server pull requests with contributor attribution.
 - Add support for scoped search in `search` action via `parentRemId`, enabling queries limited to a specific Rem's subtree. Contributed by Twb06.
 - Incorporate `parentRemId` into search cursor snapshots and hashing to enforce scope safety and readability during cursor pagination.
 - Add `set_property` bridge action for exact-ID tag/table property writes, including text, Rem-reference/select-option,
@@ -22,6 +24,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   linking to existing Rems by ID.
 - Add scoped bridge diagnostics for `insert_children` writes so live RemNote hangs can be isolated to the exact SDK
   checkpoint.
+
+### Changed
+
+- Clarify pull request adoption workflow guidance for localizing live integration failures across MCP/server and
+  bridge/RemNote boundaries before merge decisions.
+- Validate CI on Node.js `22.13.0` and `24` through shared workflow `v0.4.0`.
 
 ### Fixed
 

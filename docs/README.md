@@ -18,6 +18,10 @@
 - [Execute Bridge Commands — Screenshot Walkthrough](guides/development-execute-bridge-commands-screenshots.md) — Visual step-by-step companion to the console guide above, with annotated screenshots.
 - [Pull Request Guide](guides/pull-request-guide.md) — Cross-repo PR policy and submission checklist for contributing to `remnote-mcp-bridge` and `remnote-mcp-server`.
 
+### Maintainer Workflows
+
+- [Pull Request Validation and Adoption](workflows/pr-validation-and-adoption.md) — Evaluate external contributions, adopt accepted features on local branches, verify both repositories, and merge with contributor attribution.
+
 ---
 
 ## Reference: RemNote Domain
