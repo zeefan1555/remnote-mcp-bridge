@@ -24,6 +24,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Clarify pull request adoption workflow guidance for localizing live integration failures across MCP/server and
+  bridge/RemNote boundaries before merge decisions.
 - Validate CI on Node.js `22.13.0` and `24` through shared workflow `v0.4.0`.
 
 ### Fixed

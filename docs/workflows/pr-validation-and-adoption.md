@@ -257,6 +257,16 @@ Live validation must follow the current policies in both repositories and the ca
 5. Prefer the full MCP, MCPB, and CLI suite for final cross-repo validation.
 6. Report suite, workflow, step, and skip counts plus any persistent RemNote test artifacts.
 
+When live validation fails, localize the failure before changing contracts or merge decisions:
+
+- Record which suites did not run because an earlier suite failed; treat them as unverified, not passed.
+- Collect both sides of the boundary: MCP/server runner logs and bridge/RemNote console logs.
+- Correlate the failing action or request with the last completed checkpoint or observable response boundary.
+- If the app or bridge appears stuck, allow one clean rerun after restart and record why; repeated failures require
+  debugging, not another blind rerun.
+- When logs are insufficient, add narrowly scoped diagnostics to isolate the async boundary, then decide before merge
+  whether the diagnostics are permanent operational signal or temporary debug scaffolding.
+
 ## 9. Refresh Before Commit and Merge
 
 Immediately before committing or merging, refresh:
