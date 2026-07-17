@@ -7,31 +7,27 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-07-17
+
 ### Added
 
-- Add opt-in ordered image metadata to `read_note` via `includeMediaMetadata` and a capability-gated
-  `get_media_locator` action for resolving stable media IDs to decoded, validated RemNote-managed local filename
-  tokens. Contributed by Charles (`@charleseze356`).
-- Advertise the `media.images.v1` bridge capability during WebSocket negotiation. Contributed by Charles
-  (`@charleseze356`).
-- Add an agent-agnostic maintainer workflow for evaluating, adapting, verifying, and merging single-repo or paired
-  bridge/server pull requests with contributor attribution.
-- Add support for scoped search in `search` action via `parentRemId`, enabling queries limited to a specific Rem's subtree. Contributed by Twb06.
-- Incorporate `parentRemId` into search cursor snapshots and hashing to enforce scope safety and readability during cursor pagination.
+- Add opt-in ordered image metadata to `read_note` via `includeMediaMetadata`, advertise the `media.images.v1`
+  capability, and add the capability-gated `get_media_locator` action for resolving stable media IDs to decoded,
+  validated RemNote-managed local filename tokens. Contributed by Charles (`@charleseze356`).
+- Add scoped search in the `search` action via `parentRemId`, including scope-safe cursor snapshots and pagination.
+  Contributed by Twb06.
 - Add `set_property` bridge action for exact-ID tag/table property writes, including text, Rem-reference/select-option,
   and clear value payloads.
-- Add a repo-local Codex skill for running live integration tests through the canonical `remnote-mcp-server` agent
-  wrapper.
 - Add exact Rem reference tokens via `[[id:<remId>]]` in markdown-capable write fields, avoiding name-lookup stubs when
   linking to existing Rems by ID.
-- Add scoped bridge diagnostics for `insert_children` writes so live RemNote hangs can be isolated to the exact SDK
-  checkpoint.
+- Add an agent-agnostic maintainer workflow for evaluating, adapting, verifying, and merging single-repo or paired
+  bridge/server pull requests with contributor attribution.
 
 ### Changed
 
 - Clarify pull request adoption workflow guidance for localizing live integration failures across MCP/server and
   bridge/RemNote boundaries before merge decisions.
-- Validate CI on Node.js `22.13.0` and `24` through shared workflow `v0.4.0`.
+- Validate the bridge on Node.js `22.13.0` and `24`.
 
 ### Fixed
 
