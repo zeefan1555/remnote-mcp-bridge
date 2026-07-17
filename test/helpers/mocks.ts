@@ -419,11 +419,9 @@ export class MockRemNotePlugin {
 
   richText = {
     rem: vi.fn((rem: string | MockRem) => ({
-      value: vi.fn(
-        async (): Promise<RichTextInterface> => [
-          { i: 'q', _id: typeof rem === 'string' ? rem : rem._id } as RichTextInterface[number],
-        ]
-      ),
+      value: vi.fn(async (): Promise<RichTextInterface> => [
+        { i: 'q', _id: typeof rem === 'string' ? rem : rem._id } as RichTextInterface[number],
+      ]),
     })),
 
     parseFromMarkdown: vi.fn(async (markdown: string): Promise<RichTextInterface> => {
