@@ -27,6 +27,7 @@ export const createNoteInput: CreateNoteParams = {
   title: 'Test Note',
   content: 'This is test content\nWith multiple lines',
   tagRemIds: ['test-tag-rem-id', 'sample-tag-rem-id'],
+  aliases: ['Test Alias'],
 };
 
 export const appendJournalInput: AppendJournalParams = {
@@ -49,6 +50,8 @@ export const readNoteInput: ReadNoteParams = {
 export const updateNoteInput: UpdateNoteParams = {
   remId: 'rem_123',
   title: 'Updated Title',
+  addAliases: ['New Alias'],
+  removeAliases: ['Old Alias'],
 };
 
 export const insertChildrenInput: InsertChildrenParams = {

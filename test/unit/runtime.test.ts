@@ -102,6 +102,7 @@ describe('Bridge runtime', () => {
           action: 'create_note',
           payload: {
             title: 'Background runtime note',
+            aliases: ['Background Alias'],
           },
         },
       })
@@ -115,9 +116,39 @@ describe('Bridge runtime', () => {
     expect(snapshot.stats.created).toBe(1);
     expect(snapshot.history[0]?.action).toBe('create');
     expect(snapshot.history[0]?.id).toBe('h-1');
+    const createdRem = await plugin.rem.findOne(snapshot.history[0]?.remIds?.[0] ?? '');
+    expect((await createdRem!.getAliases()).map((alias) => alias.text)).toEqual([
+      ['Background Alias'],
+    ]);
     expect(
       snapshot.logs.some((entry) => entry.message.includes('DevTools execute: create_note'))
     ).toBe(true);
+
+    const updateResultPromise = new Promise<DevToolsResultDetail>((resolve) => {
+      window.addEventListener(
+        DEVTOOLS_RESULT_EVENT,
+        (event) => resolve((event as CustomEvent<DevToolsResultDetail>).detail),
+        { once: true }
+      );
+    });
+    window.dispatchEvent(
+      new CustomEvent(DEVTOOLS_EXECUTE_EVENT, {
+        detail: {
+          id: 'devtools-update-aliases',
+          action: 'update_note',
+          payload: {
+            remId: createdRem!._id,
+            addAliases: ['Updated Alias'],
+            removeAliases: ['Background Alias'],
+          },
+        },
+      })
+    );
+
+    expect((await updateResultPromise).ok).toBe(true);
+    expect((await createdRem!.getAliases()).map((alias) => alias.text)).toEqual([
+      ['Updated Alias'],
+    ]);
   });
 
   it('handles read_table action via devtools request', async () => {

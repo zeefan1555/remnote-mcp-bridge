@@ -32,6 +32,7 @@ export interface CreateNoteParams {
   parentId?: string;
   tagRemIds?: string[];
   asDocument?: boolean;
+  aliases?: string[];
 }
 
 export interface AppendJournalParams {
@@ -112,6 +113,8 @@ export interface MediaLocatorResult extends Omit<RemMediaMetadata, 'source'> {
 export interface UpdateNoteParams {
   remId: string;
   title?: string;
+  addAliases?: string[];
+  removeAliases?: string[];
 }
 
 export interface SetDocumentStatusParams {
@@ -490,8 +493,6 @@ const RESULT_VIEWS: readonly ResultView[] = ['compact', 'standard', 'full'];
 const ID_REFERENCE_TOKEN_PATTERN = /\[\[id:([^\]\n]*)\]\]/g;
 const ID_REFERENCE_PLACEHOLDER_PREFIX = 'rnbridgeidrefplaceholder';
 const LOCAL_FILE_PREFIX = '%LOCAL_FILE%';
-export const MEDIA_CAPABILITY = 'media.images.v1';
-
 export class RemAdapter {
   private settings: AutomationBridgeSettings;
   private readonly emittedTagDebugKeys = new Set<string>();
@@ -2394,6 +2395,83 @@ export class RemAdapter {
     return value;
   }
 
+  private normalizeAliasText(value: string): string {
+    return value.trim().replace(/\s+/g, ' ');
+  }
+
+  private parseAliases(value: unknown, fieldName: string): string[] {
+    const aliases = this.optionalStringArray(value, fieldName);
+    const uniqueAliases = new Map<string, string>();
+
+    for (const alias of aliases) {
+      const normalized = this.normalizeAliasText(alias);
+      if (!normalized) {
+        throw new Error(`${fieldName} must not contain empty aliases`);
+      }
+      uniqueAliases.set(normalized, normalized);
+    }
+
+    return [...uniqueAliases.values()];
+  }
+
+  private rejectOverlappingAliasChanges(addAliases: string[], removeAliases: string[]): void {
+    const removeSet = new Set(removeAliases);
+    const overlap = addAliases.find((alias) => removeSet.has(alias));
+    if (overlap !== undefined) {
+      throw new Error(`Alias cannot be both added and removed: ${overlap}`);
+    }
+  }
+
+  private async addAliasesToRem(
+    rem: PluginRem,
+    aliases: string[],
+    primaryTitle: string
+  ): Promise<void> {
+    const normalizedPrimaryTitle = this.normalizeAliasText(primaryTitle);
+    for (const alias of aliases) {
+      if (alias === normalizedPrimaryTitle) continue;
+      const aliasRem = await rem.getOrCreateAliasWithText(this.textToRichText(alias));
+      if (!aliasRem) {
+        throw new Error(`Failed to create alias: ${alias}`);
+      }
+    }
+  }
+
+  private async updateAliasesOnRem(
+    rem: PluginRem,
+    addAliases: string[],
+    removeAliases: string[],
+    primaryTitle: string
+  ): Promise<void> {
+    const existingAliasRems = await rem.getAliases();
+    const existingByNormalizedText = new Map<string, PluginRem[]>();
+
+    for (const aliasRem of existingAliasRems) {
+      const normalized = this.normalizeAliasText(await this.extractText(aliasRem.text));
+      const matches = existingByNormalizedText.get(normalized) ?? [];
+      matches.push(aliasRem);
+      existingByNormalizedText.set(normalized, matches);
+    }
+
+    for (const alias of removeAliases) {
+      const matches = existingByNormalizedText.get(alias) ?? [];
+      for (const aliasRem of matches) {
+        await aliasRem.remove();
+      }
+      existingByNormalizedText.delete(alias);
+    }
+
+    const normalizedPrimaryTitle = this.normalizeAliasText(primaryTitle);
+    for (const alias of addAliases) {
+      if (alias === normalizedPrimaryTitle || existingByNormalizedText.has(alias)) continue;
+      const aliasRem = await rem.getOrCreateAliasWithText(this.textToRichText(alias));
+      if (!aliasRem) {
+        throw new Error(`Failed to create alias: ${alias}`);
+      }
+      existingByNormalizedText.set(alias, [aliasRem]);
+    }
+  }
+
   private requireInsertPosition(value: unknown): InsertChildrenPosition {
     if (value === 'first' || value === 'last' || value === 'before' || value === 'after') {
       return value;
@@ -2778,6 +2856,7 @@ export class RemAdapter {
       params.asDocument === undefined || params.asDocument === null
         ? false
         : this.requireBoolean(params.asDocument, 'asDocument');
+    const aliases = this.parseAliases(params.aliases, 'aliases');
 
     const tagRemIds = [...this.optionalStringArray(params.tagRemIds, 'tagRemIds')];
     if (this.settings.autoTagEnabled && this.settings.autoTagRemId) {
@@ -2792,6 +2871,9 @@ export class RemAdapter {
 
     if (asDocument && !title) {
       throw new Error('asDocument requires title so the document root is unambiguous');
+    }
+    if (aliases.length > 0 && !title) {
+      throw new Error('aliases requires title so the alias target is unambiguous');
     }
 
     const preparedTitle = title ? await this.prepareMarkdownIdReferenceTokens(title) : undefined;
@@ -2814,6 +2896,8 @@ export class RemAdapter {
         }
 
         await this.addTagRemIdsToRem(titleRem, tagRemIds);
+        const primaryTitle = await this.extractText(titleRem.text);
+        await this.addAliasesToRem(titleRem, aliases, primaryTitle);
 
         remIds.push(titleRem._id);
         titles.push(title);
@@ -3288,7 +3372,17 @@ export class RemAdapter {
     }
 
     const remId = this.requireString(params.remId, 'remId');
-    const title = this.requireString(params.title, 'title');
+    const title =
+      params.title === undefined || params.title === null
+        ? undefined
+        : this.requireString(params.title, 'title');
+    const addAliases = this.parseAliases(params.addAliases, 'addAliases');
+    const removeAliases = this.parseAliases(params.removeAliases, 'removeAliases');
+    this.rejectOverlappingAliasChanges(addAliases, removeAliases);
+
+    if (title === undefined && addAliases.length === 0 && removeAliases.length === 0) {
+      throw new Error('update_note requires title, addAliases, or removeAliases');
+    }
 
     const rem = await this.plugin.rem.findOne(remId);
 
@@ -3296,18 +3390,21 @@ export class RemAdapter {
       throw new Error(`Note not found: ${remId}`);
     }
 
-    const remIds: string[] = [];
-    const titles: string[] = [];
+    const richText =
+      title === undefined ? undefined : await this.parseMarkdownWithIdReferenceTokens(title);
+    const primaryTitle =
+      richText === undefined
+        ? (await this.getTitleAndDetail(rem)).title
+        : await this.extractText(richText);
 
-    // Update title if provided
-    const richText = await this.parseMarkdownWithIdReferenceTokens(title);
     await this.runInTransaction(async () => {
-      await rem.setText(richText);
+      if (richText !== undefined) {
+        await rem.setText(richText);
+      }
+      await this.updateAliasesOnRem(rem, addAliases, removeAliases, primaryTitle);
     });
-    titles.push(title);
-    remIds.push(remId);
 
-    return { titles, remIds };
+    return { titles: [primaryTitle], remIds: [remId] };
   }
 
   async setDocumentStatus(params: SetDocumentStatusParams): Promise<SetDocumentStatusResult> {
@@ -3733,7 +3830,6 @@ export class RemAdapter {
     knowledgeBaseId?: string;
     acceptWriteOperations: boolean;
     acceptReplaceOperation: boolean;
-    capabilities: string[];
   }> {
     return {
       connected: true,
@@ -3741,7 +3837,6 @@ export class RemAdapter {
       knowledgeBaseId: undefined,
       acceptWriteOperations: this.settings.acceptWriteOperations,
       acceptReplaceOperation: this.settings.acceptReplaceOperation,
-      capabilities: [MEDIA_CAPABILITY],
     };
   }
 }

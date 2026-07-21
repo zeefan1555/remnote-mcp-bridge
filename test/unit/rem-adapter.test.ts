@@ -69,6 +69,47 @@ describe('RemAdapter', () => {
       expect(plugin.rem.createSingleRemWithMarkdown).toHaveBeenCalled();
     });
 
+    it('should create normalized, deduplicated Unicode aliases on the title Rem', async () => {
+      const result = await adapter.createNote({
+        title: 'Original Title',
+        aliases: [
+          ' Original   Title ',
+          ' Pôvodný   názov ',
+          'Pôvodný názov',
+          '원래 제목',
+          'العنوان الأصلي',
+        ],
+      });
+
+      const readResult = await adapter.readNote({ remId: result.remIds[0], view: 'full' });
+      expect(readResult.title).toBe('Original Title');
+      expect(readResult.aliases).toEqual(['Pôvodný názov', '원래 제목', 'العنوان الأصلي']);
+    });
+
+    it('should reject aliases for content-only creation', async () => {
+      await expect(
+        adapter.createNote({ content: '- One\n- Two', aliases: ['Ambiguous Alias'] })
+      ).rejects.toThrow('aliases requires title so the alias target is unambiguous');
+    });
+
+    it('should reject invalid or empty create aliases before creating a note', async () => {
+      await expect(
+        adapter.createNote({
+          title: 'Bad Aliases',
+          aliases: ['   '],
+        })
+      ).rejects.toThrow('aliases must not contain empty aliases');
+
+      await expect(
+        adapter.createNote({
+          title: 'Bad Aliases',
+          aliases: 'not-an-array',
+        } as unknown as Parameters<typeof adapter.createNote>[0])
+      ).rejects.toThrow('aliases must be an array of strings');
+
+      expect(plugin.rem.createSingleRemWithMarkdown).not.toHaveBeenCalled();
+    });
+
     it('should create the title Rem as a document when asDocument is true', async () => {
       const result = await adapter.createNote({
         title: 'Document Root',
@@ -2270,6 +2311,86 @@ describe('RemAdapter', () => {
       expect(rem!.text).toEqual(['New ', { i: 'q', _id: 'update_ref_target' }]);
     });
 
+    it('should add and remove normalized aliases idempotently without changing other note state', async () => {
+      const parent = plugin.addTestRem('alias_parent', 'Parent');
+      const rem = plugin.addTestRem('alias_update', 'Primary Title');
+      rem.backText = ['Card detail'];
+      rem.type = RemType.CONCEPT;
+      rem.setAliasesMock([['Existing   Alias'], ['Remove Me'], [' Remove   Me ']]);
+      await rem.setParent(parent);
+      await rem.addTag('tag-rem-id');
+
+      const result = await adapter.updateNote({
+        remId: 'alias_update',
+        addAliases: [' Existing Alias ', 'İstanbul', '日本語', 'Primary   Title'],
+        removeAliases: [' Remove   Me ', 'Missing Alias'],
+      });
+
+      expect(result).toEqual({ titles: ['Primary Title'], remIds: ['alias_update'] });
+      const readResult = await adapter.readNote({ remId: 'alias_update', view: 'full' });
+      expect(readResult.aliases).toEqual(['Existing   Alias', 'İstanbul', '日本語']);
+      expect(rem.text).toEqual(['Primary Title']);
+      expect(rem.backText).toEqual(['Card detail']);
+      expect(rem.type).toBe(RemType.CONCEPT);
+      expect(await rem.getParentRem()).toBe(parent);
+      expect(rem.getTags()).toEqual(['tag-rem-id']);
+
+      await adapter.updateNote({ remId: 'alias_update', addAliases: ['İstanbul', '日本語'] });
+      expect((await rem.getAliases()).map((alias) => alias.text)).toEqual([
+        ['Existing   Alias'],
+        ['İstanbul'],
+        ['日本語'],
+      ]);
+    });
+
+    it('should apply title and alias changes in one transaction', async () => {
+      const rem = plugin.addTestRem('alias_and_title', 'Old Title');
+      rem.setAliasesMock([['Existing Alias']]);
+      const transactionCallsBefore = plugin.app.transaction.mock.calls.length;
+
+      const result = await adapter.updateNote({
+        remId: 'alias_and_title',
+        title: 'New Title',
+        addAliases: ['New Title', 'Added Alias'],
+        removeAliases: ['Existing Alias'],
+      });
+
+      expect(plugin.app.transaction.mock.calls.length).toBe(transactionCallsBefore + 1);
+      expect(result).toEqual({ titles: ['New Title'], remIds: ['alias_and_title'] });
+      expect(rem.text).toEqual(['New Title']);
+      expect((await rem.getAliases()).map((alias) => alias.text)).toEqual([['Added Alias']]);
+    });
+
+    it('should reject overlapping normalized alias additions and removals', async () => {
+      plugin.addTestRem('alias_overlap', 'Primary Title');
+
+      await expect(
+        adapter.updateNote({
+          remId: 'alias_overlap',
+          addAliases: ['Same   Alias'],
+          removeAliases: [' Same Alias '],
+        })
+      ).rejects.toThrow('Alias cannot be both added and removed: Same Alias');
+    });
+
+    it('should reject invalid update alias payloads', async () => {
+      plugin.addTestRem('invalid_alias_update', 'Primary Title');
+
+      await expect(
+        adapter.updateNote({
+          remId: 'invalid_alias_update',
+          addAliases: [''],
+        })
+      ).rejects.toThrow('addAliases must not contain empty aliases');
+
+      await expect(
+        adapter.updateNote({
+          remId: 'invalid_alias_update',
+          removeAliases: [42],
+        } as unknown as Parameters<typeof adapter.updateNote>[0])
+      ).rejects.toThrow('removeAliases must be an array of strings');
+    });
+
     it('should throw error for non-existent note', async () => {
       await expect(
         adapter.updateNote({
@@ -2279,14 +2400,14 @@ describe('RemAdapter', () => {
       ).rejects.toThrow('Note not found: nonexistent');
     });
 
-    it('should reject update without title', async () => {
+    it('should reject update without any requested operation', async () => {
       plugin.addTestRem('update_missing_title_test', 'Original title');
 
       await expect(
         adapter.updateNote({
           remId: 'update_missing_title_test',
         } as Parameters<typeof adapter.updateNote>[0])
-      ).rejects.toThrow('title must be a string');
+      ).rejects.toThrow('update_note requires title, addAliases, or removeAliases');
     });
   });
 
@@ -3064,6 +3185,7 @@ describe('RemAdapter', () => {
       expect(typeof status.pluginVersion).toBe('string');
       expect(status.acceptWriteOperations).toBe(false);
       expect(status.acceptReplaceOperation).toBe(true);
+      expect(status).not.toHaveProperty('capabilities');
     });
   });
 

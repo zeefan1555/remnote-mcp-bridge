@@ -1,7 +1,7 @@
 declare const __PLUGIN_VERSION__: string;
 
 import { FocusEvents, SidebarEvents, type ReactRNPlugin, WindowEvents } from '@remnote/plugin-sdk';
-import { MEDIA_CAPABILITY, RemAdapter } from '../api/rem-adapter';
+import { RemAdapter } from '../api/rem-adapter';
 import {
   type BridgeRequest,
   type CompanionInfo,
@@ -241,7 +241,6 @@ class BridgeRuntimeController implements BridgeRuntime {
     return new WebSocketClient({
       url,
       pluginVersion: __PLUGIN_VERSION__,
-      capabilities: [MEDIA_CAPABILITY],
       maxReconnectAttempts: 10,
       initialReconnectDelay: 1000,
       maxReconnectDelay: 30000,
@@ -310,6 +309,7 @@ class BridgeRuntimeController implements BridgeRuntime {
           parentId: payload.parentId as string | undefined,
           tagRemIds: payload.tagRemIds as string[] | undefined,
           asDocument: payload.asDocument as boolean | undefined,
+          aliases: payload.aliases as string[] | undefined,
         });
         this.stats = { ...this.stats, created: this.stats.created + 1 };
         this.addHistoryEntry('create', result.titles || ['Note'], result.remIds);
@@ -418,6 +418,8 @@ class BridgeRuntimeController implements BridgeRuntime {
         const result = await this.adapter.updateNote({
           remId: payload.remId as string,
           title: payload.title as string | undefined,
+          addAliases: payload.addAliases as string[] | undefined,
+          removeAliases: payload.removeAliases as string[] | undefined,
         });
         this.stats = { ...this.stats, updated: this.stats.updated + 1 };
         this.addHistoryEntry('update', result.titles || ['Note updated'], result.remIds);

@@ -6,6 +6,8 @@ The Automation Bridge plugin (`remnote-mcp-bridge`) is the shared protocol layer
 - bundled `remnote-cli` command (CLI / OpenClaw / automation path, through `remnote-mcp-server`)
 
 Because these projects are currently in `0.x` versions, **minor version changes may include breaking changes**.
+New bridge actions or request fields must ship in a synchronized new minor release across the bridge and server.
+Patch releases must remain wire-compatible within their minor line.
 
 ## Do not confuse package versions with MCP protocol versions
 

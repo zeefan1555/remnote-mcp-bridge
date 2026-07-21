@@ -99,6 +99,7 @@ export class MockRem {
   private _powerups: string[] = [];
   private _practiceDirection: 'forward' | 'backward' | 'both' | 'none' = 'none';
   private _aliases: MockRem[] = [];
+  private aliasOwner: MockRem | null = null;
   private _taggedRems: MockRem[] = [];
   private _tagRems: MockRem[] = [];
   private _isPowerupProperty = false;
@@ -135,12 +136,26 @@ export class MockRem {
     this._aliases = aliases.map((rt, idx) => {
       const aliasRem = new MockRem(`${this._id}_alias_${idx}`, '');
       aliasRem.text = rt;
+      aliasRem.aliasOwner = this;
       return aliasRem;
     });
   }
 
   async getAliases(): Promise<MockRem[]> {
     return this._aliases;
+  }
+
+  async getOrCreateAliasWithText(aliasText: RichTextInterface): Promise<MockRem> {
+    const existing = this._aliases.find((aliasRem) =>
+      Object.is(JSON.stringify(aliasRem.text), JSON.stringify(aliasText))
+    );
+    if (existing) return existing;
+
+    const aliasRem = new MockRem(`${this._id}_alias_${this._aliases.length}`, '');
+    aliasRem.text = aliasText;
+    aliasRem.aliasOwner = this;
+    this._aliases.push(aliasRem);
+    return aliasRem;
   }
 
   setTaggedRemsMock(taggedRems: MockRem[]): void {
@@ -306,6 +321,10 @@ export class MockRem {
   }
 
   async remove(): Promise<void> {
+    if (this.aliasOwner) {
+      this.aliasOwner._aliases = this.aliasOwner._aliases.filter((alias) => alias !== this);
+      this.aliasOwner = null;
+    }
     if (this.parent) {
       this.parent.children = this.parent.children.filter((child) => child !== this);
     }
