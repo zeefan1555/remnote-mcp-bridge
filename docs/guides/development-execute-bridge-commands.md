@@ -71,9 +71,9 @@ Use a known Rem ID (for example `testRemId` from `create_note`).
 - [`development-execute-bridge-commands-04-set-property.js`](./js/development-execute-bridge-commands-04-set-property.js)
 
 Use `insert_children` for ordered additions that preserve existing child Rem IDs. Use `replace_children` only for
-explicitly approved destructive direct-child replacement. Use `update_tags` with exact tag Rem IDs for production
-tagging workflows. Use `set_property` with exact target/tag/property Rem IDs when setting values on property-bearing
-tags or Advanced Tables.
+explicitly approved destructive direct-content-child replacement; it preserves parent metadata. Use `update_tags` with
+exact tag Rem IDs for production tagging workflows. Use `set_property` with exact target/tag/property Rem IDs when
+setting values on property-bearing tags or Advanced Tables.
 
 ### 6) `search`
 

@@ -24,8 +24,8 @@ Purpose: give developers and AI agents a concise, reliable concept map of RemNot
 - `remnote_move_note`: safe reparenting that preserves the moved Rem ID and subtree; use dry-run before mutation.
 - `remnote_insert_children`: ordered child creation action; use this for tag description nodes and other hierarchy
   maintenance that must preserve existing child Rem IDs.
-- `remnote_replace_children`: explicit destructive direct-child replacement action; use only when replacement is
-  intentionally approved because existing child Rem IDs will be removed.
+- `remnote_replace_children`: explicit destructive direct-content-child replacement action; existing content-child Rem
+  IDs are removed, while parent identity, title, aliases, document status, tags, and properties remain unchanged.
 - `remnote_update_tags`: exact-ID tag mutation action; production tagging workflows should pass tag Rem IDs rather than
   names.
 - `remnote_set_property`: exact-ID tag/table property write action; use property Rem IDs under the owning tag/table Rem.

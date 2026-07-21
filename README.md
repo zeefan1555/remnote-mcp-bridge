@@ -232,7 +232,7 @@ the CLI maps them to commands:
 | `read_note`        | Read a note's metadata, tags, and content in markdown or structured form    |
 | `update_note`      | Update note title                                                           |
 | `insert_children`  | Insert child Rems at deterministic positions                                |
-| `replace_children` | Replace direct children when destructive replacement is enabled             |
+| `replace_children` | Replace direct content children while preserving parent metadata             |
 | `update_tags`      | Add or remove tags by exact tag Rem ID                                      |
 | `append_journal`   | Add markdown content to today's daily document with optional tag Rem IDs    |
 | `read_table`       | Read Advanced Table columns, rows, and typed property metadata              |

@@ -2867,10 +2867,65 @@ describe('RemAdapter', () => {
   });
 
   describe('replaceChildren', () => {
-    it('should replace direct children when enabled', async () => {
-      const testRem = plugin.addTestRem('replace_test', 'Parent');
-      const oldChild = new MockRem('old_child', 'Old line');
-      await oldChild.setParent(testRem);
+    async function createParentWithMetadata(id: string): Promise<{
+      parent: MockRem;
+      oldChild: MockRem;
+      metadataChildIds: string[];
+    }> {
+      const parent = plugin.addTestRem(id, 'Parent');
+      parent.setIsDocumentMock(true);
+      parent.setAliasesMock([['Alias One'], ['Alias Two']]);
+      await parent.addTag('preserved_tag');
+      parent.setTagPropertyValueMock('preserved_property', ['Preserved value']);
+
+      const aliases = await parent.getAliases();
+      for (const alias of aliases) {
+        await alias.setParent(parent);
+      }
+
+      const propertyChild = new MockRem(`${id}_property`, 'Property definition');
+      propertyChild.setIsPropertyMock(true);
+      await propertyChild.setParent(parent);
+
+      const powerupMetadataChild = new MockRem(`${id}_powerup`, 'Powerup metadata');
+      powerupMetadataChild.setPowerupPropertyMock(true);
+      await powerupMetadataChild.setParent(parent);
+
+      const oldChild = new MockRem(`${id}_old_child`, 'Old line');
+      await oldChild.setParent(parent);
+
+      return {
+        parent,
+        oldChild,
+        metadataChildIds: [
+          ...aliases.map((alias) => alias._id),
+          propertyChild._id,
+          powerupMetadataChild._id,
+        ],
+      };
+    }
+
+    async function expectParentMetadataPreserved(
+      parent: MockRem,
+      metadataChildIds: string[],
+      expectedRemId: string
+    ): Promise<void> {
+      expect(parent._id).toBe(expectedRemId);
+      expect(parent.text).toEqual(['Parent']);
+      expect(await parent.isDocument()).toBe(true);
+      expect(parent.getTags()).toEqual(['preserved_tag']);
+      expect(await parent.getTagPropertyValue('preserved_property')).toEqual(['Preserved value']);
+      expect((await parent.getAliases()).map((alias) => alias.text)).toEqual([
+        ['Alias One'],
+        ['Alias Two'],
+      ]);
+
+      const childIds = (await parent.getChildrenRem()).map((child) => child._id);
+      expect(childIds).toEqual(expect.arrayContaining(metadataChildIds));
+    }
+
+    it('should replace only direct content children and preserve parent metadata', async () => {
+      const { parent, oldChild, metadataChildIds } = await createParentWithMetadata('replace_test');
       adapter.updateSettings({ acceptReplaceOperation: true });
 
       const result = await adapter.replaceChildren({
@@ -2879,24 +2934,49 @@ describe('RemAdapter', () => {
       });
 
       expect(result.remIds).toHaveLength(2);
-      const children = await testRem.getChildrenRem();
-      expect(children).toHaveLength(2);
-      expect(children.map((c) => c.text?.[0])).toEqual(['New line 1', 'New line 2']);
+      await expectParentMetadataPreserved(parent, metadataChildIds, 'replace_test');
+
+      const children = await parent.getChildrenRem();
+      expect(children.map((child) => child._id)).not.toContain(oldChild._id);
+      expect(
+        children
+          .filter((child) => result.remIds.includes(child._id))
+          .map((child) => child.text?.[0])
+      ).toEqual(['New line 1', 'New line 2']);
     });
 
-    it('should clear direct children when replacement content is empty string', async () => {
-      const testRem = plugin.addTestRem('replace_clear_test', 'Parent');
-      const oldChild = new MockRem('old_child_clear', 'Old line');
-      await oldChild.setParent(testRem);
+    it('should clear only direct content children when replacement content is empty', async () => {
+      const { parent, oldChild, metadataChildIds } =
+        await createParentWithMetadata('replace_clear_test');
       adapter.updateSettings({ acceptReplaceOperation: true });
 
-      await adapter.replaceChildren({
+      const result = await adapter.replaceChildren({
         parentRemId: 'replace_clear_test',
         content: '',
       });
 
-      const children = await testRem.getChildrenRem();
-      expect(children).toHaveLength(0);
+      expect(result).toEqual({ titles: [], remIds: [] });
+      await expectParentMetadataPreserved(parent, metadataChildIds, 'replace_clear_test');
+      expect((await parent.getChildrenRem()).map((child) => child._id)).not.toContain(oldChild._id);
+    });
+
+    it('should abort before deleting children when metadata classification fails', async () => {
+      const testRem = plugin.addTestRem('replace_classification_failure_test', 'Parent');
+      const oldChild = new MockRem('replace_classification_failure_child', 'Old line');
+      await oldChild.setParent(testRem);
+      vi.spyOn(oldChild, 'isProperty').mockRejectedValueOnce(
+        new Error('Metadata classification unavailable')
+      );
+      adapter.updateSettings({ acceptReplaceOperation: true });
+
+      await expect(
+        adapter.replaceChildren({
+          parentRemId: 'replace_classification_failure_test',
+          content: 'New line',
+        })
+      ).rejects.toThrow('Metadata classification unavailable');
+
+      expect((await testRem.getChildrenRem()).map((child) => child._id)).toEqual([oldChild._id]);
     });
 
     it('should reject malformed replacement content without clearing children', async () => {

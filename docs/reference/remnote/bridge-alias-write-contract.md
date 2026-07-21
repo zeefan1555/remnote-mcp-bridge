@@ -21,6 +21,11 @@ Removal matches normalized alias text exactly and removes every matching alias R
 title. The same normalized alias cannot appear in both operations because the intended final state would be
 ambiguous. A title change and alias changes execute in one RemNote transaction.
 
+## Structural write isolation
+
+`replace_children` replaces only direct content children. Aliases are parent metadata and remain unchanged alongside
+the parent Rem ID, title, document status, tags, and properties.
+
 ## Compatibility
 
 Alias writes are part of the complete bridge/server contract for their release line rather than a separately

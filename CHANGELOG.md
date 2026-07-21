@@ -17,6 +17,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Define synchronized minor releases as the compatibility boundary for new bridge/server protocol features while
   preserving patch-level wire compatibility.
 
+### Fixed
+
+- Fix `replace_children` so destructive child replacement preserves parent aliases, properties, tags, document status,
+  title, and Rem ID.
+
 ### Removed
 
 - Remove the redundant bridge capability list and `media.images.v1` negotiation; matching bridge/server minor versions

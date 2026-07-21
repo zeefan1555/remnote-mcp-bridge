@@ -1382,6 +1382,21 @@ export class RemAdapter {
     return false;
   }
 
+  private async isProtectedParentMetadataChild(
+    rem: PluginRem,
+    aliasRemIds: ReadonlySet<string>
+  ): Promise<boolean> {
+    if (aliasRemIds.has(rem._id)) return true;
+    if (await rem.isProperty()) return true;
+
+    return (
+      (await rem.isPowerupProperty()) ||
+      (await rem.isPowerupPropertyListItem()) ||
+      (await rem.isPowerupSlot()) ||
+      (await rem.isPowerupEnum())
+    );
+  }
+
   private async isEmptyTextLeaf(rem: PluginRem): Promise<boolean> {
     const remType = await this.classifyRem(rem);
     if (remType !== 'text') return false;
@@ -2810,12 +2825,21 @@ export class RemAdapter {
   }
 
   /**
-   * Remove all direct child Rems under a parent Rem.
+   * Remove direct content children without deleting SDK metadata stored in the child collection.
+   * Classify every child before mutating so an SDK classification failure aborts safely.
    */
-  private async clearDirectChildren(rem: PluginRem): Promise<void> {
-    const children = await rem.getChildrenRem();
-    for (const child of children) {
-      await child.remove();
+  private async clearDirectContentChildren(rem: PluginRem): Promise<void> {
+    const [children, aliases] = await Promise.all([rem.getChildrenRem(), rem.getAliases()]);
+    const aliasRemIds = new Set(aliases.map((aliasRem) => aliasRem._id));
+    const classifiedChildren = await Promise.all(
+      children.map(async (child) => ({
+        child,
+        isMetadata: await this.isProtectedParentMetadataChild(child, aliasRemIds),
+      }))
+    );
+
+    for (const { child, isMetadata } of classifiedChildren) {
+      if (!isMetadata) await child.remove();
     }
   }
 
@@ -3648,7 +3672,7 @@ export class RemAdapter {
       : undefined;
 
     return await this.runInTransaction(async () => {
-      await this.clearDirectChildren(rem);
+      await this.clearDirectContentChildren(rem);
       if (preparedContent) {
         const createdRems = await this.createRemsFromPreparedMarkdown(preparedContent, rem._id);
 
