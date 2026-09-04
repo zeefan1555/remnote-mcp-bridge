@@ -108,8 +108,8 @@ Use `./run-prod-build.sh` for production-style local verification (no hot reload
 
 ## Documentation and Changelog Rules
 
-- Before any docs edits, read `.agents/dev-documentation.md`.
-- Any functional or documentation change must be recorded in `CHANGELOG.md`.
+- Update documentation when behavior, contracts, configuration, or non-obvious rationale changes.
+- Record notable functional and documentation changes in `CHANGELOG.md`.
 - Keep AGENTS/docs map-level: rationale, constraints, contracts, and navigation.
   - Avoid restating implementation details obvious from code.
 - When changing bridge action contracts or response semantics that are visible through MCP/CLI consumers:
@@ -140,4 +140,4 @@ Publishing helper:
 
 ## Git Policy
 
-Do not create commits unless explicitly requested. Use `.agents/dev-workflow.md` as canonical policy.
+Do not create commits unless explicitly requested.
