@@ -142,4 +142,6 @@ Publishing helper:
 
 ## Git Policy
 
-Do not create commits unless explicitly requested.
+This user-maintained fork follows a single-maintainer workflow. For requested changes, run proportional verification,
+commit directly on `main`, and push to `origin/main`. Do not open or update a pull request unless the user explicitly
+asks for one. Keep the pull-request documentation for evaluating external contributions.
