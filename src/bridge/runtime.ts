@@ -414,6 +414,11 @@ class BridgeRuntimeController implements BridgeRuntime {
         return result;
       }
 
+      case 'get_review_stats':
+        return await this.adapter.getReviewStats({
+          remIds: payload.remIds as string[],
+        });
+
       case 'update_note': {
         const result = await this.adapter.updateNote({
           remId: payload.remId as string,

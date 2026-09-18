@@ -230,6 +230,7 @@ the CLI maps them to commands:
 | `search`           | Search the knowledge base with query, filters, and tag ID/name metadata     |
 | `search_by_tag`    | Search by exact tag Rem ID with ancestor context and content controls       |
 | `read_note`        | Read a note's metadata, tags, and content in markdown or structured form    |
+| `get_review_stats` | Read native review history and scheduling facts for cards from exact Rem IDs |
 | `update_note`      | Update note title                                                           |
 | `insert_children`  | Insert child Rems at deterministic positions                                |
 | `replace_children` | Replace direct content children while preserving parent metadata             |

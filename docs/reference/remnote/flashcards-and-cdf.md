@@ -28,6 +28,8 @@ Implication for agents:
 
 - `remnote_read_note` consumers may need to distinguish "this is content" vs "this drives cards".
 - `remnote_search` ranking/snippets should not implicitly assume every match is equivalent study material.
+- `get_review_stats` exposes the SDK's native card type, timestamps, repetition history, and consecutive wrong count;
+  consumers decide how to interpret those facts.
 
 ## Authoring context matters
 

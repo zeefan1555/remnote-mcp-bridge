@@ -2,7 +2,13 @@
  * Mock implementations for testing
  */
 import { vi } from 'vitest';
-import type { RichTextInterface, PluginRem, SetRemType } from '@remnote/plugin-sdk';
+import type {
+  RichTextInterface,
+  PluginCardType,
+  PluginRem,
+  RepetitionStatusInterface,
+  SetRemType,
+} from '@remnote/plugin-sdk';
 import { MessagingEvents, RemType } from '@remnote/plugin-sdk';
 import { BridgeRequest } from '../../src/bridge/websocket-client';
 
@@ -87,6 +93,19 @@ export class MockWebSocket {
 /**
  * Mock Rem implementation
  */
+export class MockCard {
+  constructor(
+    readonly _id: string,
+    readonly remId: string,
+    readonly type: PluginCardType,
+    readonly createdAt: number,
+    readonly repetitionHistory?: RepetitionStatusInterface[],
+    readonly nextRepetitionTime?: number,
+    readonly timesWrongInRow?: number,
+    readonly lastRepetitionTime?: number
+  ) {}
+}
+
 export class MockRem {
   _id: string;
   text: RichTextInterface;
@@ -110,6 +129,7 @@ export class MockRem {
   private _propertyType: string | undefined;
   private _tagPropertyValues = new Map<string, RichTextInterface>();
   private _isTable = false;
+  private cards: MockCard[] = [];
 
   constructor(id: string, text: string) {
     this._id = id;
@@ -268,6 +288,14 @@ export class MockRem {
 
   async isTable(): Promise<boolean> {
     return this._isTable;
+  }
+
+  setCardsMock(cards: MockCard[]): void {
+    this.cards = cards;
+  }
+
+  async getCards(): Promise<MockCard[]> {
+    return this.cards;
   }
 
   async setText(text: RichTextInterface): Promise<void> {

@@ -7,7 +7,7 @@ import {
   MAX_HISTORY,
   getBridgeInstallMode,
 } from '../../src/bridge/runtime';
-import { MockRem, MockRemNotePlugin, MockWebSocket } from '../helpers/mocks';
+import { MockCard, MockRem, MockRemNotePlugin, MockWebSocket } from '../helpers/mocks';
 import { RemAdapter } from '../../src/api/rem-adapter';
 import {
   DEVTOOLS_EXECUTE_EVENT,
@@ -199,6 +199,54 @@ describe('Bridge runtime', () => {
     expect(result.action).toBe('read_table');
     expect(snapshot.history[0]?.action).toBe('read');
     expect(snapshot.history[0]?.titles).toContain('TestTable');
+  });
+
+  it('handles get_review_stats action via devtools request', async () => {
+    plugin.setTestSetting(SETTING_WS_URL, 'ws://127.0.0.1:3002');
+    const rem = plugin.addTestRem('runtime-review-rem', 'Review card');
+    rem.setCardsMock([
+      new MockCard('runtime-card', 'runtime-review-rem', 'forward', 100, [], 300, 1, 200),
+    ]);
+
+    runtime = await initializeBridgeRuntime(plugin as unknown as never);
+    await wait(10);
+
+    const resultPromise = new Promise<DevToolsResultDetail>((resolve) => {
+      window.addEventListener(
+        DEVTOOLS_RESULT_EVENT,
+        (event) => resolve((event as CustomEvent<DevToolsResultDetail>).detail),
+        { once: true }
+      );
+    });
+    window.dispatchEvent(
+      new CustomEvent(DEVTOOLS_EXECUTE_EVENT, {
+        detail: {
+          id: 'devtools-review-stats',
+          action: 'get_review_stats',
+          payload: { remIds: ['runtime-review-rem'] },
+        },
+      })
+    );
+
+    await expect(resultPromise).resolves.toMatchObject({
+      ok: true,
+      action: 'get_review_stats',
+      result: {
+        results: [
+          {
+            remId: 'runtime-review-rem',
+            cards: [
+              {
+                cardId: 'runtime-card',
+                lastRepetitionTime: 200,
+                nextRepetitionTime: 300,
+                timesWrongInRow: 1,
+              },
+            ],
+          },
+        ],
+      },
+    });
   });
 
   it('handles set_property action via devtools request', async () => {

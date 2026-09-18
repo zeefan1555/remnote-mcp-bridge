@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { RemType, BuiltInPowerupCodes, RichTextElementInterface } from '@remnote/plugin-sdk';
 import { RemAdapter } from '../../src/api/rem-adapter';
-import { MockRemNotePlugin, MockRem } from '../helpers/mocks';
+import { MockCard, MockRemNotePlugin, MockRem } from '../helpers/mocks';
 
 describe('RemAdapter', () => {
   let plugin: MockRemNotePlugin;
@@ -471,6 +471,93 @@ describe('RemAdapter', () => {
       expect(plugin.rem.createTreeWithMarkdown).toHaveBeenCalledWith(
         'dummy\n  1. Item 1',
         expect.anything()
+      );
+    });
+  });
+
+  describe('getReviewStats', () => {
+    it('returns native review facts for every card generated from each Rem', async () => {
+      const forwardRem = plugin.addTestRem('review-forward-rem', 'Forward card');
+      forwardRem.setCardsMock([
+        new MockCard(
+          'card-forward',
+          'review-forward-rem',
+          'forward',
+          1_700_000_000_000,
+          [
+            {
+              date: 1_700_000_100_000,
+              score: 1,
+              responseTime: 1800,
+              scheduled: 1_700_000_050_000,
+            },
+          ],
+          1_700_100_000_000,
+          0,
+          1_700_000_100_000
+        ),
+      ]);
+      const clozeRem = plugin.addTestRem('review-cloze-rem', 'Cloze card');
+      clozeRem.setCardsMock([
+        new MockCard('card-cloze', 'review-cloze-rem', { clozeId: 'c1' }, 1_700_000_200_000),
+      ]);
+
+      await expect(
+        adapter.getReviewStats({ remIds: ['review-forward-rem', 'review-cloze-rem'] })
+      ).resolves.toEqual({
+        results: [
+          {
+            remId: 'review-forward-rem',
+            cards: [
+              {
+                cardId: 'card-forward',
+                remId: 'review-forward-rem',
+                type: 'forward',
+                createdAt: 1_700_000_000_000,
+                repetitionHistory: [
+                  {
+                    date: 1_700_000_100_000,
+                    score: 1,
+                    responseTime: 1800,
+                    scheduled: 1_700_000_050_000,
+                  },
+                ],
+                nextRepetitionTime: 1_700_100_000_000,
+                timesWrongInRow: 0,
+                lastRepetitionTime: 1_700_000_100_000,
+              },
+            ],
+          },
+          {
+            remId: 'review-cloze-rem',
+            cards: [
+              {
+                cardId: 'card-cloze',
+                remId: 'review-cloze-rem',
+                type: { clozeId: 'c1' },
+                createdAt: 1_700_000_200_000,
+                repetitionHistory: [],
+              },
+            ],
+          },
+        ],
+      });
+    });
+
+    it('returns an empty card list for a Rem without generated cards', async () => {
+      plugin.addTestRem('review-no-cards', 'Plain note');
+
+      await expect(adapter.getReviewStats({ remIds: ['review-no-cards'] })).resolves.toEqual({
+        results: [{ remId: 'review-no-cards', cards: [] }],
+      });
+    });
+
+    it('rejects missing or empty Rem IDs', async () => {
+      await expect(adapter.getReviewStats({ remIds: [] })).rejects.toThrow(
+        'remIds must contain at least one Rem ID'
+      );
+      await expect(adapter.getReviewStats({ remIds: ['missing'] })).rejects.toThrow(
+        'Note not found: missing'
       );
     });
   });

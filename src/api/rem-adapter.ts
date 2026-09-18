@@ -9,6 +9,8 @@ import {
   PluginRem,
   RemType,
   BuiltInPowerupCodes,
+  type PluginCardType,
+  type RepetitionStatusInterface,
 } from '@remnote/plugin-sdk';
 import {
   AutomationBridgeSettings,
@@ -206,6 +208,30 @@ export interface ReadTableResult {
   rows: TableRow[];
   totalRows: number;
   rowsReturned: number;
+}
+
+export interface ReviewStatsParams {
+  remIds: string[];
+}
+
+export interface CardReviewStats {
+  cardId: string;
+  remId: string;
+  type: PluginCardType;
+  createdAt: number;
+  repetitionHistory: RepetitionStatusInterface[];
+  lastRepetitionTime?: number;
+  nextRepetitionTime?: number;
+  timesWrongInRow?: number;
+}
+
+export interface RemReviewStats {
+  remId: string;
+  cards: CardReviewStats[];
+}
+
+export interface ReviewStatsResult {
+  results: RemReviewStats[];
 }
 
 export interface ContentProperties {
@@ -3843,6 +3869,45 @@ export class RemAdapter {
       totalRows,
       rowsReturned: rows.length,
     };
+  }
+
+  /** Return the native review facts for every card generated from the requested Rems. */
+  async getReviewStats(params: ReviewStatsParams): Promise<ReviewStatsResult> {
+    const remIds = this.optionalStringArray(params.remIds, 'remIds').map((remId, index) =>
+      this.requireNonEmptyString(remId, `remIds[${index}]`)
+    );
+    if (remIds.length === 0) {
+      throw new Error('remIds must contain at least one Rem ID');
+    }
+
+    const results: RemReviewStats[] = [];
+    for (const remId of remIds) {
+      const rem = await this.plugin.rem.findOne(remId);
+      if (!rem) {
+        throw new Error(`Note not found: ${remId}`);
+      }
+
+      const cards = await rem.getCards();
+      results.push({
+        remId,
+        cards: cards.map((card) => ({
+          cardId: card._id,
+          remId: card.remId,
+          type: card.type,
+          createdAt: card.createdAt,
+          repetitionHistory: card.repetitionHistory ?? [],
+          ...(card.lastRepetitionTime !== undefined
+            ? { lastRepetitionTime: card.lastRepetitionTime }
+            : {}),
+          ...(card.nextRepetitionTime !== undefined
+            ? { nextRepetitionTime: card.nextRepetitionTime }
+            : {}),
+          ...(card.timesWrongInRow !== undefined ? { timesWrongInRow: card.timesWrongInRow } : {}),
+        })),
+      });
+    }
+
+    return { results };
   }
 
   /**

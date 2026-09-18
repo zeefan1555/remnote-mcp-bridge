@@ -9,6 +9,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add the read-only `get_review_stats` action for retrieving native card repetition history, scheduling timestamps, and
+  consecutive wrong counts from exact Rem IDs.
 - Add real RemNote alias writes to `create_note` and `update_note`, with whitespace normalization, exact additive and
   removal operations, idempotency, Unicode preservation, and protection against ambiguous or contradictory requests.
 
