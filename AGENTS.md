@@ -92,17 +92,18 @@ Use `./run-prod-build.sh` for production-style local verification (no hot reload
 ## Integration and Live Validation Policy
 
 - This repo does not ship a dedicated `npm run test:integration` flow.
-- When live RemNote verification is required, ask the human collaborator to run/confirm it in a real RemNote session.
-- If agent-assisted live integration runs are being triggered from `remnote-mcp-server`, the agent
-  must first ask the human collaborator to start the bridge in RemNote.
-- If bridge code changed after the currently running RemNote bridge session started, the agent must ask the human
-  collaborator to restart the bridge before rerunning live integration tests.
+- When live RemNote verification is required, use a real RemNote session. If the user explicitly grants full-operation
+  authority, the agent may load or reload the localhost plugin through Computer Use; otherwise ask the human
+  collaborator to do it.
+- If bridge code changed after the current RemNote bridge session started, reload the localhost plugin before live
+  integration. Under full-operation authority the agent performs and verifies that reload.
 - CLI and MCP server live integration tests use the same `remnote-mcp-server` bridge connection.
 - AI agents must run server-side live integration through `../remnote-mcp-server/run-agent-integration-test.sh`, not
   `run-integration-test.sh` or `npm run test:integration*`. Before invoking it, run
   `../remnote-mcp-server/run-agent-integration-test.sh --preflight-only` outside the Codex sandbox; if anything is
-  listening on the configured HTTP MCP port, including a launchd-managed MCP server, refuse to run and ask Robert to
-  stop that server manually. Do not stop or restart existing MCP server or launchd processes yourself.
+  listening on the configured HTTP MCP port, identify its owner before continuing. Under full-operation authority, the
+  agent may stop and later restore only the confirmed project-owned `com.remnote.mcp-server` launchd service. For any
+  unknown listener, refuse to stop it and ask the human collaborator.
 - Agent-assisted live integration must run outside the Codex sandbox with escalated execution because the `tsx` runners
   create macOS temp-directory IPC pipes that can fail under sandboxing with `listen EPERM`.
 - Use local unit/static/build checks for agent-side verification.
