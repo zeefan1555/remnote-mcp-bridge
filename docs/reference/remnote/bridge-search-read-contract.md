@@ -120,6 +120,12 @@ contract keeps iterations safe and predictable.
   - `bidirectional`
 - Omit when SDK reports no direction (`none`) or when the Rem is not a flashcard.
 
+### `cards` (optional, search only)
+
+- Present only when `remnote_search.includeReviewStats` is `true`.
+- Contains the same native card review facts returned by `remnote_get_review_stats`.
+- An empty array means the result Rem currently generates no cards; no mastery state is inferred.
+
 ### `content` (optional)
 
 - Rendered markdown representation of the Rem's child subtree.
@@ -173,6 +179,9 @@ The adapter-level renderer should preserve meaning over exact visual fidelity:
 - Default search limit in bridge is 50 unless caller provides `limit`.
 - Default `contentMode` for search is `"none"`.
 - Search supports optional `parentRemId` to scope the search within a specific Rem's subtree (excluding the context Rem itself from results).
+- `cardsOnly: true` filters the cursor snapshot to Rems that currently generate at least one card.
+- `includeReviewStats: true` adds native card facts to each returned page item without changing result ordering or
+  inferring mastery.
 - Search `contentMode` modes: `"none" | "markdown" | "structured"`.
 - Search supports `view: "compact" | "standard" | "full"` for metadata detail and `ancestorDepth` for parent-first
   ancestors.
@@ -182,7 +191,7 @@ The adapter-level renderer should preserve meaning over exact visual fidelity:
 - Cursor paging:
   - responses include `hasMore`, optional `nextCursor`, `truncated`, and optional `truncationReason`;
   - passing `cursor` returns the next page from the same short-lived ordered snapshot;
-  - cursors are query-bound and `parentRemId`-bound, and expire after bridge session inactivity;
+  - cursors are query-bound, `parentRemId`-bound, and `cardsOnly`-bound, and expire after bridge session inactivity;
   - the bridge retains at most 20 active search snapshots.
 - Result ordering:
   1. grouped by `remType` priority (`document`/`concept` > `dailyDocument` > `portal` > `descriptor` > `text`)

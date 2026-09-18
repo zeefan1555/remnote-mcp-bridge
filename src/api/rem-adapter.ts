@@ -53,6 +53,8 @@ export interface AppendJournalParams {
 export interface SearchParams {
   query: string;
   parentRemId?: string;
+  cardsOnly?: boolean;
+  includeReviewStats?: boolean;
   limit?: number;
   cursor?: string;
   contentMode?: ContentMode;
@@ -218,7 +220,10 @@ export interface ReadTableResult {
 }
 
 export interface ReviewStatsParams {
-  remIds: string[];
+  remIds?: string[];
+  rootRemId?: string;
+  tagRemId?: string;
+  today?: boolean;
 }
 
 export interface CardReviewStats {
@@ -239,6 +244,67 @@ export interface RemReviewStats {
 
 export interface ReviewStatsResult {
   results: RemReviewStats[];
+}
+
+export interface OutlineParams {
+  rootRemId?: string;
+  today?: boolean;
+  collapsed: boolean;
+  dryRun?: boolean;
+}
+
+export interface OutlineItem {
+  remId: string;
+  title: string;
+  oldIsCollapsed: boolean;
+  newIsCollapsed: boolean;
+  changed: boolean;
+}
+
+export interface OutlineResult {
+  rootRemId: string;
+  rootTitle: string;
+  collapsed: boolean;
+  dryRun: boolean;
+  scanned: number;
+  eligible: number;
+  changed: number;
+  items: OutlineItem[];
+}
+
+export interface ListTodosParams {
+  tagRemId: string;
+}
+
+export interface TodoItem {
+  remId: string;
+  title: string;
+  isTodo: boolean;
+  todoStatus?: 'Finished' | 'Unfinished';
+  parentRemId?: string;
+  parentTitle?: string;
+}
+
+export interface ListTodosResult {
+  tagRemId: string;
+  todos: TodoItem[];
+}
+
+export interface UpdateTodoParams {
+  remId: string;
+  finished: boolean;
+  todoTagRemId: string;
+  doneTagRemId: string;
+  dryRun?: boolean;
+}
+
+export interface UpdateTodoResult extends TodoItem {
+  dryRun: boolean;
+  changed: boolean;
+  oldTodoStatus?: 'Finished' | 'Unfinished';
+  newTodoStatus?: 'Finished' | 'Unfinished';
+  addedTagRemIds: string[];
+  removedTagRemIds: string[];
 }
 
 export interface ContentProperties {
@@ -270,6 +336,7 @@ export interface SearchResultItem {
   contextTitle?: string;
   contextReason?: SearchByTagContextReason;
   cardDirection?: CardDirection;
+  cards?: CardReviewStats[];
   content?: string;
   contentStructured?: StructuredContentNode[];
   contentProperties?: ContentProperties;
@@ -389,6 +456,9 @@ const SEARCH_CURSOR_MAX_ACTIVE = 20;
 /** Search snapshots are short-lived because they capture an ordering view of mutable KB state. */
 const SEARCH_CURSOR_TTL_MS = 15 * 60 * 1000;
 
+/** Maximum Rems expanded from one review scope. */
+const REVIEW_SCOPE_LIMIT = 1000;
+
 /** Default recursion depth for read operations. */
 const DEFAULT_DEPTH = 5;
 
@@ -446,6 +516,7 @@ interface SearchContentOptions {
   maxContentLength: number;
   ancestorDepth: number;
   view: ResultView;
+  includeReviewStats: boolean;
 }
 
 interface SearchCursorSnapshot {
@@ -453,6 +524,7 @@ interface SearchCursorSnapshot {
   query: string;
   queryHash: string;
   parentRemId?: string;
+  cardsOnly: boolean;
   remIds: string[];
   createdAt: number;
   lastAccessedAt: number;
@@ -909,6 +981,24 @@ export class RemAdapter {
   private async getCardDirection(rem: PluginRem): Promise<CardDirection | undefined> {
     if (!rem.backText) return undefined;
     return this.mapCardDirection(await rem.getPracticeDirection());
+  }
+
+  private async getCardReviewStats(rem: PluginRem): Promise<CardReviewStats[]> {
+    const cards = await rem.getCards();
+    return cards.map((card) => ({
+      cardId: card._id,
+      remId: card.remId,
+      type: card.type,
+      createdAt: card.createdAt,
+      repetitionHistory: card.repetitionHistory ?? [],
+      ...(card.lastRepetitionTime !== undefined
+        ? { lastRepetitionTime: card.lastRepetitionTime }
+        : {}),
+      ...(card.nextRepetitionTime !== undefined
+        ? { nextRepetitionTime: card.nextRepetitionTime }
+        : {}),
+      ...(card.timesWrongInRow !== undefined ? { timesWrongInRow: card.timesWrongInRow } : {}),
+    }));
   }
 
   private getCardDelimiterIndex(richText: RichTextInterface | undefined): number {
@@ -1665,7 +1755,8 @@ export class RemAdapter {
   private getSearchSnapshotFromCursor(
     query: string,
     cursor: string,
-    parentRemId?: string
+    parentRemId: string | undefined,
+    cardsOnly: boolean
   ): {
     snapshot: SearchCursorSnapshot;
     offset: number;
@@ -1681,7 +1772,8 @@ export class RemAdapter {
     if (
       snapshot.query !== query ||
       snapshot.queryHash !== parsed.queryHash ||
-      snapshot.parentRemId !== parentRemId
+      snapshot.parentRemId !== parentRemId ||
+      snapshot.cardsOnly !== cardsOnly
     ) {
       throw new Error('Search cursor does not match query or parent rem id');
     }
@@ -1722,7 +1814,8 @@ export class RemAdapter {
 
   private async createSearchSnapshot(
     query: string,
-    parentRemId?: string
+    parentRemId: string | undefined,
+    cardsOnly: boolean
   ): Promise<SearchCursorSnapshot> {
     this.pruneExpiredSearchSnapshots();
     const searchResults = await this.plugin.search.search(
@@ -1746,6 +1839,8 @@ export class RemAdapter {
         if (!isChild) continue;
       }
 
+      if (cardsOnly && (await rem.getCards()).length === 0) continue;
+
       collected.push({
         remId: rem._id,
         remType: await this.classifyRem(rem),
@@ -1764,8 +1859,11 @@ export class RemAdapter {
     const snapshot: SearchCursorSnapshot = {
       id: this.createSearchSnapshotId(),
       query,
-      queryHash: this.hashSearchQuery(query + '\0' + (parentRemId || '')),
+      queryHash: this.hashSearchQuery(
+        `${query}\0${parentRemId || ''}\0${cardsOnly ? 'cards' : 'all'}`
+      ),
       parentRemId,
+      cardsOnly,
       remIds: collected.map((item) => item.remId),
       createdAt: now,
       lastAccessedAt: now,
@@ -1945,7 +2043,13 @@ export class RemAdapter {
   private getSearchContentOptions(
     params: Pick<
       SearchParams,
-      'contentMode' | 'depth' | 'childLimit' | 'maxContentLength' | 'ancestorDepth' | 'view'
+      | 'contentMode'
+      | 'depth'
+      | 'childLimit'
+      | 'maxContentLength'
+      | 'ancestorDepth'
+      | 'view'
+      | 'includeReviewStats'
     >
   ): SearchContentOptions {
     return {
@@ -1955,6 +2059,7 @@ export class RemAdapter {
       maxContentLength: params.maxContentLength ?? DEFAULT_SEARCH_MAX_CONTENT_LENGTH,
       ancestorDepth: this.getAncestorDepth(params.ancestorDepth),
       view: this.parseResultView(params.view),
+      includeReviewStats: params.includeReviewStats === true,
     };
   }
 
@@ -1985,6 +2090,7 @@ export class RemAdapter {
     ]);
 
     const headline = this.formatHeadline(title, detail, remType);
+    const cards = options.includeReviewStats ? await this.getCardReviewStats(rem) : undefined;
 
     let content: string | undefined;
     let contentStructured: StructuredContentNode[] | undefined;
@@ -2027,6 +2133,7 @@ export class RemAdapter {
       ...(options.view !== 'compact' && tags.length > 0 ? { tags } : {}),
       remType,
       ...(options.view !== 'compact' && cardDirection ? { cardDirection } : {}),
+      ...(cards !== undefined ? { cards } : {}),
       ...(content ? { content } : {}),
       ...(contentStructured ? { contentStructured } : {}),
       ...(contentProperties ? { contentProperties } : {}),
@@ -3112,11 +3219,12 @@ export class RemAdapter {
   async search(params: SearchParams): Promise<SearchResult> {
     const limit = this.getSearchLimit(params.limit);
     const options = this.getSearchContentOptions(params);
+    const cardsOnly = params.cardsOnly === true;
     const tagNameCache: TagNameCache = new Map();
     const { snapshot, offset } = params.cursor
-      ? this.getSearchSnapshotFromCursor(params.query, params.cursor, params.parentRemId)
+      ? this.getSearchSnapshotFromCursor(params.query, params.cursor, params.parentRemId, cardsOnly)
       : {
-          snapshot: await this.createSearchSnapshot(params.query, params.parentRemId),
+          snapshot: await this.createSearchSnapshot(params.query, params.parentRemId, cardsOnly),
           offset: 0,
         };
 
@@ -3311,6 +3419,7 @@ export class RemAdapter {
       maxContentLength: DEFAULT_SEARCH_MAX_CONTENT_LENGTH,
       ancestorDepth,
       view,
+      includeReviewStats: false,
     };
     const results: SearchResultItem[] = [];
 
@@ -3886,43 +3995,225 @@ export class RemAdapter {
     };
   }
 
-  /** Return the native review facts for every card generated from the requested Rems. */
-  async getReviewStats(params: ReviewStatsParams): Promise<ReviewStatsResult> {
-    const remIds = this.optionalStringArray(params.remIds, 'remIds').map((remId, index) =>
-      this.requireNonEmptyString(remId, `remIds[${index}]`)
-    );
-    if (remIds.length === 0) {
-      throw new Error('remIds must contain at least one Rem ID');
+  private async resolveReviewScope(params: ReviewStatsParams): Promise<PluginRem[]> {
+    const selectorCount =
+      (params.remIds !== undefined ? 1 : 0) +
+      (params.rootRemId !== undefined ? 1 : 0) +
+      (params.tagRemId !== undefined ? 1 : 0) +
+      (params.today === true ? 1 : 0);
+    if (selectorCount !== 1) {
+      throw new Error('Provide exactly one of remIds, rootRemId, tagRemId, or today=true');
     }
 
-    const results: RemReviewStats[] = [];
-    for (const remId of remIds) {
-      const rem = await this.plugin.rem.findOne(remId);
-      if (!rem) {
-        throw new Error(`Note not found: ${remId}`);
+    let rems: PluginRem[] = [];
+    if (params.remIds !== undefined) {
+      const remIds = this.optionalStringArray(params.remIds, 'remIds').map((remId, index) =>
+        this.requireNonEmptyString(remId, `remIds[${index}]`)
+      );
+      if (remIds.length === 0) throw new Error('remIds must contain at least one Rem ID');
+      for (const remId of remIds) {
+        const rem = await this.plugin.rem.findOne(remId);
+        if (!rem) throw new Error(`Note not found: ${remId}`);
+        rems.push(rem);
       }
+    } else if (params.today === true) {
+      const dailyDoc = await this.plugin.date.getTodaysDoc();
+      if (!dailyDoc) throw new Error("Today's daily document was not found");
+      rems = [dailyDoc, ...(await dailyDoc.getDescendants())];
+    } else if (params.rootRemId !== undefined) {
+      const rootRemId = this.requireNonEmptyString(params.rootRemId, 'rootRemId');
+      const root = await this.plugin.rem.findOne(rootRemId);
+      if (!root) throw new Error(`Note not found: ${rootRemId}`);
+      rems = [root, ...(await root.getDescendants())];
+    } else {
+      const tagRemId = this.requireNonEmptyString(params.tagRemId, 'tagRemId');
+      const tag = await this.plugin.rem.findOne(tagRemId);
+      if (!tag) throw new Error(`Tag not found: ${tagRemId}`);
+      const taggedRems = await tag.taggedRem();
+      for (const taggedRem of taggedRems) {
+        rems.push(taggedRem, ...(await taggedRem.getDescendants()));
+      }
+    }
 
-      const cards = await rem.getCards();
-      results.push({
-        remId,
-        cards: cards.map((card) => ({
-          cardId: card._id,
-          remId: card.remId,
-          type: card.type,
-          createdAt: card.createdAt,
-          repetitionHistory: card.repetitionHistory ?? [],
-          ...(card.lastRepetitionTime !== undefined
-            ? { lastRepetitionTime: card.lastRepetitionTime }
-            : {}),
-          ...(card.nextRepetitionTime !== undefined
-            ? { nextRepetitionTime: card.nextRepetitionTime }
-            : {}),
-          ...(card.timesWrongInRow !== undefined ? { timesWrongInRow: card.timesWrongInRow } : {}),
-        })),
+    const unique = [...new Map(rems.map((rem) => [rem._id, rem])).values()];
+    if (unique.length > REVIEW_SCOPE_LIMIT) {
+      throw new Error(`Review scope exceeds ${REVIEW_SCOPE_LIMIT} Rems`);
+    }
+    return unique;
+  }
+
+  /** Return the native review facts for every card generated from the requested Rem scope. */
+  async getReviewStats(params: ReviewStatsParams): Promise<ReviewStatsResult> {
+    const rems = await this.resolveReviewScope(params);
+    const results: RemReviewStats[] = [];
+    for (const rem of rems) {
+      results.push({ remId: rem._id, cards: await this.getCardReviewStats(rem) });
+    }
+    return { results };
+  }
+
+  async setOutlineCollapsed(params: OutlineParams): Promise<OutlineResult> {
+    const selectorCount =
+      (params.rootRemId !== undefined ? 1 : 0) + (params.today === true ? 1 : 0);
+    if (selectorCount !== 1) {
+      throw new Error('Provide exactly one of rootRemId or today=true');
+    }
+
+    const collapsed = this.requireBoolean(params.collapsed, 'collapsed');
+    const dryRun = params.dryRun ?? true;
+    if (!dryRun && !this.settings.acceptWriteOperations) {
+      throw new Error('Write operations are disabled in Automation Bridge settings');
+    }
+
+    const rootRemId =
+      params.today === true ? undefined : this.requireNonEmptyString(params.rootRemId, 'rootRemId');
+    const root =
+      params.today === true
+        ? await this.plugin.date.getTodaysDoc()
+        : await this.plugin.rem.findOne(rootRemId!);
+    if (!root) {
+      throw new Error(
+        params.today ? "Today's daily document was not found" : `Root not found: ${rootRemId}`
+      );
+    }
+
+    const descendants = (await root.allRemInDocumentOrPortal()).filter(
+      (rem) => rem._id !== root._id
+    );
+    const candidates: Array<{ rem: PluginRem; item: OutlineItem }> = [];
+    for (const rem of descendants) {
+      if ((await rem.getChildrenRem()).length === 0) continue;
+      const oldIsCollapsed = await rem.isCollapsed(root._id);
+      candidates.push({
+        rem,
+        item: {
+          remId: rem._id,
+          title: (await this.getTitleAndDetail(rem)).title,
+          oldIsCollapsed,
+          newIsCollapsed: collapsed,
+          changed: oldIsCollapsed !== collapsed,
+        },
       });
     }
 
-    return { results };
+    if (!dryRun) {
+      await this.runInTransaction(async () => {
+        for (const candidate of candidates) {
+          if (!candidate.item.changed) continue;
+          await candidate.rem.setIsCollapsed(collapsed, root._id);
+          if ((await candidate.rem.isCollapsed(root._id)) !== collapsed) {
+            throw new Error(`Failed to update collapsed state for Rem ${candidate.rem._id}`);
+          }
+        }
+      });
+    }
+
+    return {
+      rootRemId: root._id,
+      rootTitle: (await this.getTitleAndDetail(root)).title,
+      collapsed,
+      dryRun,
+      scanned: descendants.length,
+      eligible: candidates.length,
+      changed: candidates.filter((candidate) => candidate.item.changed).length,
+      items: candidates.map((candidate) => candidate.item),
+    };
+  }
+
+  async listTodos(params: ListTodosParams): Promise<ListTodosResult> {
+    const tagRemId = this.requireNonEmptyString(params.tagRemId, 'tagRemId');
+    const tag = await this.plugin.rem.findOne(tagRemId);
+    if (!tag) throw new Error(`Tag not found: ${tagRemId}`);
+
+    const todos: TodoItem[] = [];
+    for (const rem of await tag.taggedRem()) {
+      const [{ title }, parentContext, isTodo] = await Promise.all([
+        this.getTitleAndDetail(rem),
+        this.getParentContext(rem),
+        rem.isTodo(),
+      ]);
+      const todoStatus = isTodo ? await rem.getTodoStatus() : undefined;
+      todos.push({
+        remId: rem._id,
+        title,
+        isTodo,
+        ...(todoStatus ? { todoStatus } : {}),
+        ...parentContext,
+      });
+    }
+
+    return { tagRemId, todos };
+  }
+
+  async updateTodo(params: UpdateTodoParams): Promise<UpdateTodoResult> {
+    const remId = this.requireNonEmptyString(params.remId, 'remId');
+    const todoTagRemId = this.requireNonEmptyString(params.todoTagRemId, 'todoTagRemId');
+    const doneTagRemId = this.requireNonEmptyString(params.doneTagRemId, 'doneTagRemId');
+    if (todoTagRemId === doneTagRemId) {
+      throw new Error('todoTagRemId and doneTagRemId must be different');
+    }
+
+    const finished = this.requireBoolean(params.finished, 'finished');
+    const dryRun = params.dryRun ?? true;
+    if (!dryRun && !this.settings.acceptWriteOperations) {
+      throw new Error('Write operations are disabled in Automation Bridge settings');
+    }
+
+    const [rem, todoTag, doneTag] = await Promise.all([
+      this.plugin.rem.findOne(remId),
+      this.plugin.rem.findOne(todoTagRemId),
+      this.plugin.rem.findOne(doneTagRemId),
+    ]);
+    if (!rem) throw new Error(`Note not found: ${remId}`);
+    if (!todoTag) throw new Error(`TODO tag not found: ${todoTagRemId}`);
+    if (!doneTag) throw new Error(`DONE tag not found: ${doneTagRemId}`);
+
+    const [{ title }, parentContext, isTodo, currentTags] = await Promise.all([
+      this.getTitleAndDetail(rem),
+      this.getParentContext(rem),
+      rem.isTodo(),
+      rem.getTagRems(),
+    ]);
+    const oldTodoStatus = isTodo ? await rem.getTodoStatus() : undefined;
+    const newTodoStatus = isTodo ? (finished ? 'Finished' : 'Unfinished') : undefined;
+    const currentTagIds = new Set(currentTags.map((tag) => tag._id));
+    const addTagRemId = finished ? doneTagRemId : todoTagRemId;
+    const removeTagRemId = finished ? todoTagRemId : doneTagRemId;
+    const addedTagRemIds = currentTagIds.has(addTagRemId) ? [] : [addTagRemId];
+    const removedTagRemIds = currentTagIds.has(removeTagRemId) ? [removeTagRemId] : [];
+    const changed =
+      oldTodoStatus !== newTodoStatus || addedTagRemIds.length > 0 || removedTagRemIds.length > 0;
+
+    if (!dryRun && changed) {
+      await this.runInTransaction(async () => {
+        if (isTodo && oldTodoStatus !== newTodoStatus) {
+          await rem.setTodoStatus(newTodoStatus!);
+        }
+        if (addedTagRemIds.length > 0) await rem.addTag(addTagRemId);
+        if (removedTagRemIds.length > 0) await rem.removeTag(removeTagRemId);
+
+        const verifiedTagIds = new Set((await rem.getTagRems()).map((tag) => tag._id));
+        if (!verifiedTagIds.has(addTagRemId) || verifiedTagIds.has(removeTagRemId)) {
+          throw new Error(`Failed to update TODO tags for Rem ${remId}`);
+        }
+        if (isTodo && (await rem.getTodoStatus()) !== newTodoStatus) {
+          throw new Error(`Failed to update native TODO status for Rem ${remId}`);
+        }
+      });
+    }
+
+    return {
+      remId,
+      title,
+      isTodo,
+      ...parentContext,
+      dryRun,
+      changed,
+      ...(oldTodoStatus ? { oldTodoStatus } : {}),
+      ...(newTodoStatus ? { newTodoStatus } : {}),
+      addedTagRemIds,
+      removedTagRemIds,
+    };
   }
 
   /**

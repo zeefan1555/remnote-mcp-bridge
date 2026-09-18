@@ -333,6 +333,8 @@ class BridgeRuntimeController implements BridgeRuntime {
         const result = await this.adapter.search({
           query: payload.query as string,
           parentRemId: typeof payload.parentRemId === 'string' ? payload.parentRemId : undefined,
+          cardsOnly: payload.cardsOnly as boolean | undefined,
+          includeReviewStats: payload.includeReviewStats as boolean | undefined,
           limit: payload.limit as number | undefined,
           cursor: typeof payload.cursor === 'string' ? payload.cursor : undefined,
           contentMode: payload.contentMode as 'none' | 'markdown' | 'structured' | undefined,
@@ -416,7 +418,32 @@ class BridgeRuntimeController implements BridgeRuntime {
 
       case 'get_review_stats':
         return await this.adapter.getReviewStats({
-          remIds: payload.remIds as string[],
+          remIds: payload.remIds as string[] | undefined,
+          rootRemId: payload.rootRemId as string | undefined,
+          tagRemId: payload.tagRemId as string | undefined,
+          today: payload.today as boolean | undefined,
+        });
+
+      case 'set_outline_collapsed':
+        return await this.adapter.setOutlineCollapsed({
+          rootRemId: payload.rootRemId as string | undefined,
+          today: payload.today as boolean | undefined,
+          collapsed: payload.collapsed as boolean,
+          dryRun: payload.dryRun as boolean | undefined,
+        });
+
+      case 'list_todos':
+        return await this.adapter.listTodos({
+          tagRemId: payload.tagRemId as string,
+        });
+
+      case 'update_todo':
+        return await this.adapter.updateTodo({
+          remId: payload.remId as string,
+          finished: payload.finished as boolean,
+          todoTagRemId: payload.todoTagRemId as string,
+          doneTagRemId: payload.doneTagRemId as string,
+          dryRun: payload.dryRun as boolean | undefined,
         });
 
       case 'get_sdk_capabilities':

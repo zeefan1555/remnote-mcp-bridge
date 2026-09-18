@@ -287,6 +287,61 @@ describe('Bridge runtime', () => {
     });
   });
 
+  it('routes outline and todo workflow actions through the adapter', async () => {
+    plugin.setTestSetting(SETTING_WS_URL, 'ws://127.0.0.1:3002');
+    const root = plugin.addTestRem('runtime-outline-root', 'Root');
+    const branch = plugin.addTestRem('runtime-outline-branch', 'Branch');
+    const leaf = plugin.addTestRem('runtime-outline-leaf', 'Leaf');
+    await branch.setParent(root);
+    await leaf.setParent(branch);
+    const todoTag = plugin.addTestRem('runtime-todo-tag', 'TODO');
+    plugin.addTestRem('runtime-done-tag', 'DONE');
+    const todo = plugin.addTestRem('runtime-todo', 'Task');
+    todo.setTodoMock(true, 'Unfinished');
+    todo.setTagRemsMock([todoTag]);
+    todoTag.setTaggedRemsMock([todo]);
+
+    runtime = await initializeBridgeRuntime(plugin as unknown as never);
+    await wait(10);
+
+    const execute = (id: string, action: string, payload: Record<string, unknown>) => {
+      const resultPromise = new Promise<DevToolsResultDetail>((resolve) => {
+        window.addEventListener(
+          DEVTOOLS_RESULT_EVENT,
+          (event) => resolve((event as CustomEvent<DevToolsResultDetail>).detail),
+          { once: true }
+        );
+      });
+      window.dispatchEvent(
+        new CustomEvent(DEVTOOLS_EXECUTE_EVENT, { detail: { id, action, payload } })
+      );
+      return resultPromise;
+    };
+
+    await expect(
+      execute('outline-preview', 'set_outline_collapsed', {
+        rootRemId: root._id,
+        collapsed: true,
+        dryRun: true,
+      })
+    ).resolves.toMatchObject({ ok: true, result: { dryRun: true, eligible: 1 } });
+    await expect(
+      execute('todo-list', 'list_todos', { tagRemId: todoTag._id })
+    ).resolves.toMatchObject({
+      ok: true,
+      result: { todos: [{ remId: todo._id, todoStatus: 'Unfinished' }] },
+    });
+    await expect(
+      execute('todo-preview', 'update_todo', {
+        remId: todo._id,
+        finished: true,
+        todoTagRemId: todoTag._id,
+        doneTagRemId: 'runtime-done-tag',
+        dryRun: true,
+      })
+    ).resolves.toMatchObject({ ok: true, result: { dryRun: true, changed: true } });
+  });
+
   it('handles set_property action via devtools request', async () => {
     plugin.setTestSetting(SETTING_WS_URL, 'ws://127.0.0.1:3002');
 

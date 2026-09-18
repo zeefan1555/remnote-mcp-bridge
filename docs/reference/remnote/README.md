@@ -14,8 +14,11 @@ Purpose: give developers and AI agents a concise, reliable concept map of RemNot
 ## Bridge action relevance
 
 - `remnote_read_note`: depends heavily on hierarchy semantics, references/portals context, and Rem text interpretation.
-- `remnote_get_review_stats`: reads native card repetition and scheduling facts for exact source Rem IDs without
-  calculating a separate mastery score.
+- `remnote_get_review_stats`: reads native card repetition and scheduling facts by exact IDs, root, tag, or today's
+  document without calculating a separate mastery score.
+- `remnote_set_outline_collapsed`: changes only outline presentation state for non-leaf Rems and verifies the result.
+- `remnote_list_todos` / `remnote_update_todo`: combine exact-tag discovery with native todo state and transactional
+  status-tag synchronization.
 - `remnote_search`: depends on search behavior expectations, query scope, and what should be returned as summary
   context.
 - `remnote_list_children`: direct-child hierarchy traversal without rendering a whole subtree.

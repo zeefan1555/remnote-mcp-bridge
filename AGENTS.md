@@ -27,10 +27,13 @@ discontinued; maintained CLI code lives in `remnote-mcp-server/src/remnote-cli/`
 ### External Bridge Action Surface
 
 - `create_note` (simple note creation, optional root document status, hierarchical markdown import, markdown flashcards)
-- `search`
+- `search` (optional card-only filtering and native review facts)
 - `search_by_tag`
 - `read_note`
-- `get_review_stats` (native card repetition and scheduling facts for exact Rem IDs)
+- `get_review_stats` (native card repetition and scheduling facts by exact IDs, root, tag, or today)
+- `set_outline_collapsed` (dry-run-first batch collapse/expand with portal-context verification)
+- `list_todos` (exact-tag todo discovery with native todo state)
+- `update_todo` (transactional native status and TODO/DONE tag synchronization)
 - `get_sdk_capabilities` (generated inventory of the SDK 0.0.46 callable public surface)
 - `sdk_call` (expert-only invocation by registered capability ID with write/destructive gates)
 - `get_media_locator` (capability-gated RemNote-managed image token resolution)

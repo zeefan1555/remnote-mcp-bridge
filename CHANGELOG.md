@@ -7,6 +7,17 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-09-18
+
+### Added
+
+- Add transactional outline collapse/expand and TODO list/update actions for high-level CLI workflows.
+- Allow review facts to be collected from today's daily document, a root subtree, or directly tagged subtrees.
+
+### Changed
+
+- Allow search to return only Rems with generated cards and optionally include their native review facts.
+
 ## [0.19.0] - 2026-09-18
 
 ### Added

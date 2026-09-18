@@ -11,6 +11,8 @@ Patch releases must remain wire-compatible within their minor line.
 
 The generic RemNote SDK surface (`get_sdk_capabilities` and `sdk_call`) requires bridge and server `0.19.x` or newer.
 Its reported `sdkVersion` is the bundled RemNote Plugin SDK version, not the bridge/server compatibility version.
+Scoped review statistics, card-aware search, outline folding, and TODO workflow actions require bridge and server
+`0.20.x` or newer.
 
 ## Do not confuse package versions with MCP protocol versions
 

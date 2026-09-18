@@ -130,6 +130,9 @@ export class MockRem {
   private _tagPropertyValues = new Map<string, RichTextInterface>();
   private _isTable = false;
   private cards: MockCard[] = [];
+  private _isTodo = false;
+  private _todoStatus: 'Finished' | 'Unfinished' | undefined;
+  private _collapsedByPortal = new Map<string, boolean>();
 
   constructor(id: string, text: string) {
     this._id = id;
@@ -334,6 +337,18 @@ export class MockRem {
     return this.children;
   }
 
+  async getDescendants(): Promise<MockRem[]> {
+    const descendants: MockRem[] = [];
+    for (const child of this.children) {
+      descendants.push(child, ...(await child.getDescendants()));
+    }
+    return descendants;
+  }
+
+  async allRemInDocumentOrPortal(): Promise<MockRem[]> {
+    return await this.getDescendants();
+  }
+
   async getParentRem(): Promise<MockRem | undefined> {
     return this.parent ?? undefined;
   }
@@ -342,10 +357,40 @@ export class MockRem {
     if (!this.tags.includes(tagId)) {
       this.tags.push(tagId);
     }
+    if (!this._tagRems.some((tag) => tag._id === tagId)) {
+      this._tagRems.push(new MockRem(tagId, tagId));
+    }
   }
 
   async removeTag(tagId: string): Promise<void> {
     this.tags = this.tags.filter((id) => id !== tagId);
+    this._tagRems = this._tagRems.filter((tag) => tag._id !== tagId);
+  }
+
+  setTodoMock(isTodo: boolean, status?: 'Finished' | 'Unfinished'): void {
+    this._isTodo = isTodo;
+    this._todoStatus = isTodo ? (status ?? 'Unfinished') : undefined;
+  }
+
+  async isTodo(): Promise<boolean> {
+    return this._isTodo;
+  }
+
+  async getTodoStatus(): Promise<'Finished' | 'Unfinished' | undefined> {
+    return this._todoStatus;
+  }
+
+  async setTodoStatus(status: 'Finished' | 'Unfinished'): Promise<void> {
+    this._todoStatus = status;
+  }
+
+  async isCollapsed(portalId: string): Promise<boolean> {
+    return this._collapsedByPortal.get(portalId) ?? false;
+  }
+
+  async setIsCollapsed(isCollapsed: boolean, portalId: string): Promise<boolean> {
+    this._collapsedByPortal.set(portalId, isCollapsed);
+    return isCollapsed;
   }
 
   async remove(): Promise<void> {
@@ -562,6 +607,10 @@ export class MockRemNotePlugin {
         this.rems.set(id, dailyDoc);
       }
       return dailyDoc;
+    }),
+
+    getTodaysDoc: vi.fn(async (): Promise<MockRem> => {
+      return await this.date.getDailyDoc(new Date());
     }),
   };
 

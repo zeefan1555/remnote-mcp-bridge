@@ -560,6 +560,107 @@ describe('RemAdapter', () => {
         'Note not found: missing'
       );
     });
+
+    it("collects review facts from today's full subtree", async () => {
+      const daily = await plugin.date.getTodaysDoc();
+      const topic = plugin.addTestRem('review-topic', 'Topic');
+      const cardRem = plugin.addTestRem('review-child', 'Question');
+      await topic.setParent(daily);
+      await cardRem.setParent(topic);
+      cardRem.setCardsMock([
+        new MockCard('review-card', 'review-child', 'forward', 1_700_000_000_000),
+      ]);
+
+      const result = await adapter.getReviewStats({ today: true });
+
+      expect(result.results.map((entry) => entry.remId)).toEqual([
+        'daily_doc',
+        'review-topic',
+        'review-child',
+      ]);
+      expect(result.results.at(-1)?.cards).toHaveLength(1);
+    });
+  });
+
+  describe('outline and todo workflows', () => {
+    it('previews and applies outline collapse for non-leaf descendants', async () => {
+      const root = plugin.addTestRem('outline-root', 'Root');
+      const branch = plugin.addTestRem('outline-branch', 'Branch');
+      const leaf = plugin.addTestRem('outline-leaf', 'Leaf');
+      await branch.setParent(root);
+      await leaf.setParent(branch);
+
+      const preview = await adapter.setOutlineCollapsed({
+        rootRemId: 'outline-root',
+        collapsed: true,
+      });
+      expect(preview).toMatchObject({ dryRun: true, scanned: 2, eligible: 1, changed: 1 });
+      expect(await branch.isCollapsed('outline-root')).toBe(false);
+
+      const applied = await adapter.setOutlineCollapsed({
+        rootRemId: 'outline-root',
+        collapsed: true,
+        dryRun: false,
+      });
+      expect(applied).toMatchObject({ dryRun: false, eligible: 1, changed: 1 });
+      expect(await branch.isCollapsed('outline-root')).toBe(true);
+    });
+
+    it('allows outline preview but blocks apply when writes are disabled', async () => {
+      const root = plugin.addTestRem('outline-locked-root', 'Root');
+      const branch = plugin.addTestRem('outline-locked-branch', 'Branch');
+      const leaf = plugin.addTestRem('outline-locked-leaf', 'Leaf');
+      await branch.setParent(root);
+      await leaf.setParent(branch);
+      adapter.updateSettings({ acceptWriteOperations: false });
+
+      await expect(
+        adapter.setOutlineCollapsed({ rootRemId: root._id, collapsed: true })
+      ).resolves.toMatchObject({ dryRun: true, changed: 1 });
+      await expect(
+        adapter.setOutlineCollapsed({ rootRemId: root._id, collapsed: true, dryRun: false })
+      ).rejects.toThrow('Write operations are disabled');
+    });
+
+    it('lists tagged todos and atomically completes one', async () => {
+      const todoTag = plugin.addTestRem('todo-tag', 'TODO');
+      plugin.addTestRem('done-tag', 'DONE');
+      const todo = plugin.addTestRem('todo-1', 'Finish task');
+      todo.setTodoMock(true, 'Unfinished');
+      todo.setTagRemsMock([todoTag]);
+      todoTag.setTaggedRemsMock([todo]);
+
+      await expect(adapter.listTodos({ tagRemId: 'todo-tag' })).resolves.toEqual({
+        tagRemId: 'todo-tag',
+        todos: [
+          {
+            remId: 'todo-1',
+            title: 'Finish task',
+            isTodo: true,
+            todoStatus: 'Unfinished',
+          },
+        ],
+      });
+
+      const result = await adapter.updateTodo({
+        remId: 'todo-1',
+        finished: true,
+        todoTagRemId: 'todo-tag',
+        doneTagRemId: 'done-tag',
+        dryRun: false,
+      });
+      expect(result).toMatchObject({
+        dryRun: false,
+        changed: true,
+        oldTodoStatus: 'Unfinished',
+        newTodoStatus: 'Finished',
+        addedTagRemIds: ['done-tag'],
+        removedTagRemIds: ['todo-tag'],
+      });
+      expect(await todo.getTodoStatus()).toBe('Finished');
+      expect(todo.getTags()).toContain('done-tag');
+      expect(todo.getTags()).not.toContain('todo-tag');
+    });
   });
 
   describe('appendJournal', () => {
@@ -729,6 +830,33 @@ describe('RemAdapter', () => {
       });
 
       expect(result.results.length).toBeLessThanOrEqual(2);
+    });
+
+    it('should filter to cards and include native review facts', async () => {
+      const cardRem = (await plugin.rem.findOne('rem_2'))!;
+      cardRem.setCardsMock([
+        new MockCard('search-card', 'rem_2', 'forward', 1_700_000_000_000, [
+          { date: 1_700_000_100_000, score: 1 },
+        ]),
+      ]);
+
+      const result = await adapter.search({
+        query: 'note',
+        cardsOnly: true,
+        includeReviewStats: true,
+      });
+
+      expect(result.results).toHaveLength(1);
+      expect(result.results[0]).toMatchObject({
+        remId: 'rem_2',
+        cards: [
+          {
+            cardId: 'search-card',
+            remId: 'rem_2',
+            repetitionHistory: [{ date: 1_700_000_100_000, score: 1 }],
+          },
+        ],
+      });
     });
 
     it('should reject non-positive search limits', async () => {
