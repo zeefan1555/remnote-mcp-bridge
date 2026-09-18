@@ -74,6 +74,22 @@ connection point that the server package can target:
 - **Read Notes** - Read notes with tags plus markdown or structured child content for follow-up navigation
 - **Update Notes** - Rename notes, insert or replace hierarchical content, and manage tags by exact Rem ID
 - **Daily Journal** - Append entries to today's daily document, including hierarchical markdown content and optional exact tag Rem IDs
+- **SDK Expert Access** - Discover the installed RemNote Plugin SDK surface and invoke supported one-shot SDK methods by explicit capability ID
+
+### SDK Expert Access
+
+The `get_sdk_capabilities` action reports all 286 callable public entries in `@remnote/plugin-sdk` 0.0.46, including
+namespace, Rem, Card, RichTextBuilder, Query, and `track` methods. Each entry includes its generated `remnote-cli`
+command group and second-level name, SDK declaration signatures, support status, and read/write/interactive/destructive
+mode. Callback, listener, widget-registration, scheduler-registration, and stateful builder APIs remain visible but are
+rejected with a reason.
+
+Use `sdk_call` with a listed capability ID, positional `args`, and `targetId` for `rem:*` or `card:*` capabilities.
+Arguments may contain `{"$ref":"rem","id":"..."}`, `{"$ref":"card","id":"..."}`, or
+`{"$type":"date","value":"..."}` recursively. Every generic SDK call requires **Accept write operations**; destructive
+capabilities additionally require `allowDestructive: true`. Results are bounded JSON values, with Rem and Card objects
+reduced to stable IDs and public fields instead of reusable in-memory handles. JavaScript `undefined` is preserved as
+`{"$type":"undefined"}`.
 
 ### Plugin Features
 
@@ -210,7 +226,7 @@ Access plugin settings in RemNote via **Settings > Plugins > Automation Bridge (
 
 | Setting                  | Description                                                          | Default               |
 | ------------------------ | -------------------------------------------------------------------- | --------------------- |
-| Accept write operations  | Allow write actions (`create_note`, `update_note`, `append_journal`)       | `true`                |
+| Accept write operations  | Allow write actions and the generic `sdk_call` expert surface                   | `true`                |
 | Accept replace operation | Allow destructive child replacement actions                               | `false`               |
 | Auto-tag created notes   | Add a tag to notes created via bridge actions                              | `true`                |
 | Auto-tag Rem ID          | Exact tag Rem ID for auto-tagged created notes; tag names are not accepted | ``                    |

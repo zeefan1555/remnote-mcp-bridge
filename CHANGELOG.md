@@ -7,8 +7,14 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-09-18
+
 ### Added
 
+- Add `get_sdk_capabilities` and guarded `sdk_call` actions over a generated registry of all 286 callable public entries
+  in RemNote Plugin SDK 0.0.46. The registry includes the 19 CLI command groups, unique second-level command names,
+  public SDK signatures, safety modes, and explicit unsupported reasons for callback and stateful plugin-only APIs.
+- Add recursive Rem/Card references and Date arguments plus bounded JSON result serialization for generic SDK calls.
 - Add the read-only `get_review_stats` action for retrieving native card repetition history, scheduling timestamps, and
   consecutive wrong counts from exact Rem IDs.
 - Add real RemNote alias writes to `create_note` and `update_note`, with whitespace normalization, exact additive and

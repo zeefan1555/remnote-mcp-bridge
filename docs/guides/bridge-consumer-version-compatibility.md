@@ -9,6 +9,9 @@ Because these projects are currently in `0.x` versions, **minor version changes 
 New bridge actions or request fields must ship in a synchronized new minor release across the bridge and server.
 Patch releases must remain wire-compatible within their minor line.
 
+The generic RemNote SDK surface (`get_sdk_capabilities` and `sdk_call`) requires bridge and server `0.19.x` or newer.
+Its reported `sdkVersion` is the bundled RemNote Plugin SDK version, not the bridge/server compatibility version.
+
 ## Do not confuse package versions with MCP protocol versions
 
 - Bridge/server package versions look like `0.x.y`.

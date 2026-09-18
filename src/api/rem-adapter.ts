@@ -20,6 +20,13 @@ import {
   DEFAULT_JOURNAL_PREFIX,
 } from '../settings';
 import { withScopedLogPrefix } from '../logging';
+import {
+  executeSdkCall,
+  getSdkCapabilities as listSdkCapabilities,
+  type SdkCallParams,
+  type SdkCallResult,
+  type SdkCapabilitiesResult,
+} from './sdk-executor';
 
 // Build-time constant injected by webpack DefinePlugin
 declare const __PLUGIN_VERSION__: string;
@@ -556,6 +563,14 @@ export class RemAdapter {
    */
   getSettings(): AutomationBridgeSettings {
     return { ...this.settings };
+  }
+
+  getSdkCapabilities(): SdkCapabilitiesResult {
+    return listSdkCapabilities();
+  }
+
+  async sdkCall(params: SdkCallParams): Promise<SdkCallResult> {
+    return await executeSdkCall(this.plugin, this.settings.acceptWriteOperations, params);
   }
 
   private mergeInlineRefs(...refGroups: InlineReference[][]): InlineReference[] {

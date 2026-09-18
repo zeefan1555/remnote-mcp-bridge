@@ -31,6 +31,8 @@ discontinued; maintained CLI code lives in `remnote-mcp-server/src/remnote-cli/`
 - `search_by_tag`
 - `read_note`
 - `get_review_stats` (native card repetition and scheduling facts for exact Rem IDs)
+- `get_sdk_capabilities` (generated inventory of the SDK 0.0.46 callable public surface)
+- `sdk_call` (expert-only invocation by registered capability ID with write/destructive gates)
 - `get_media_locator` (capability-gated RemNote-managed image token resolution)
 - `list_children`
 - `move_note`
@@ -81,11 +83,16 @@ Core commands:
 npm run dev
 npm run build
 npm run typecheck
+npm run check:sdk-capabilities
 npm test
 npm run test:coverage
 ./code-quality.sh
 ./run-prod-build.sh
 ```
+
+The SDK expert registry is generated from the installed `@remnote/plugin-sdk` declaration files. After changing that
+dependency, run `npm run generate:sdk-capabilities`; the drift check must pass before commit. Do not add dynamic method
+lookup outside the generated allowlist or expose callback/stateful object handles over JSON.
 
 Use `./run-prod-build.sh` for production-style local verification (no hot reload).
 

@@ -249,6 +249,44 @@ describe('Bridge runtime', () => {
     });
   });
 
+  it('routes SDK discovery and generic calls through the adapter', async () => {
+    plugin.setTestSetting(SETTING_WS_URL, 'ws://127.0.0.1:3002');
+    runtime = await initializeBridgeRuntime(plugin as unknown as never);
+    await wait(10);
+
+    const execute = (id: string, action: string, payload: Record<string, unknown>) => {
+      const resultPromise = new Promise<DevToolsResultDetail>((resolve) => {
+        window.addEventListener(
+          DEVTOOLS_RESULT_EVENT,
+          (event) => resolve((event as CustomEvent<DevToolsResultDetail>).detail),
+          { once: true }
+        );
+      });
+      window.dispatchEvent(
+        new CustomEvent(DEVTOOLS_EXECUTE_EVENT, { detail: { id, action, payload } })
+      );
+      return resultPromise;
+    };
+
+    await expect(execute('sdk-list', 'get_sdk_capabilities', {})).resolves.toMatchObject({
+      ok: true,
+      result: { sdkVersion: '0.0.46' },
+    });
+    await expect(
+      execute('sdk-call', 'sdk_call', {
+        capability: 'namespace:date.getDailyDoc',
+        args: [{ $type: 'date', value: '2026-09-18T00:00:00.000Z' }],
+        allowDestructive: false,
+      })
+    ).resolves.toMatchObject({
+      ok: true,
+      result: {
+        capability: 'namespace:date.getDailyDoc',
+        value: { $type: 'rem', id: 'daily_doc' },
+      },
+    });
+  });
+
   it('handles set_property action via devtools request', async () => {
     plugin.setTestSetting(SETTING_WS_URL, 'ws://127.0.0.1:3002');
 

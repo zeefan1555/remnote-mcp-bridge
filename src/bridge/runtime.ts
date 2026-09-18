@@ -419,6 +419,17 @@ class BridgeRuntimeController implements BridgeRuntime {
           remIds: payload.remIds as string[],
         });
 
+      case 'get_sdk_capabilities':
+        return this.adapter.getSdkCapabilities();
+
+      case 'sdk_call':
+        return await this.adapter.sdkCall({
+          capability: payload.capability as string,
+          targetId: payload.targetId as string | undefined,
+          args: payload.args as unknown[] | undefined,
+          allowDestructive: payload.allowDestructive as boolean | undefined,
+        });
+
       case 'update_note': {
         const result = await this.adapter.updateNote({
           remId: payload.remId as string,

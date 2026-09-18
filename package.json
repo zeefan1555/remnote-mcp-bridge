@@ -1,7 +1,7 @@
 {
   "private": true,
   "name": "remnote-mcp-bridge",
-  "version": "0.18.0",
+  "version": "0.19.0",
   "license": "MIT",
   "bin": {
     "remnote-mcp-bridge": "./bin/remnote-mcp-bridge.js"
@@ -13,6 +13,8 @@
     "check-types": "tsc",
     "dev": "cross-env NODE_ENV=development webpack-dev-server --color --progress --no-open",
     "build": "remnote-plugin validate && shx rm -rf dist && cross-env NODE_ENV=production webpack --color --progress && cd dist && bestzip ../PluginZip.zip ./*",
+    "generate:sdk-capabilities": "node scripts/generate-sdk-capabilities.mjs",
+    "check:sdk-capabilities": "node scripts/generate-sdk-capabilities.mjs --check",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
