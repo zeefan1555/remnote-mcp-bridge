@@ -476,7 +476,14 @@ class BridgeRuntimeController implements BridgeRuntime {
           isDocument: payload.isDocument as boolean,
           dryRun: payload.dryRun as boolean | undefined,
           expectedOldRemType: payload.expectedOldRemType as
-            'document' | 'dailyDocument' | 'concept' | 'descriptor' | 'portal' | 'text' | undefined,
+            | 'folder'
+            | 'document'
+            | 'dailyDocument'
+            | 'concept'
+            | 'descriptor'
+            | 'portal'
+            | 'text'
+            | undefined,
         });
         if (result.changed) {
           this.stats = { ...this.stats, updated: this.stats.updated + 1 };

@@ -115,6 +115,7 @@ export class MockRem {
   private tags: string[] = [];
   private parent: MockRem | null = null;
   private _isDocument = false;
+  private _isFolder = false;
   private _powerups: string[] = [];
   private _practiceDirection: 'forward' | 'backward' | 'both' | 'none' = 'none';
   private _aliases: MockRem[] = [];
@@ -143,6 +144,11 @@ export class MockRem {
   /** Configure mock to behave as a document */
   setIsDocumentMock(val: boolean): void {
     this._isDocument = val;
+  }
+
+  /** Configure mock to behave as a folder */
+  setIsFolderMock(val: boolean): void {
+    this._isFolder = val;
   }
 
   /** Add a powerup code (e.g. BuiltInPowerupCodes.DailyDocument) */
@@ -220,6 +226,14 @@ export class MockRem {
 
   async setIsDocument(isDocument: boolean): Promise<void> {
     this._isDocument = isDocument;
+  }
+
+  async isFolder(): Promise<boolean> {
+    return this._isFolder;
+  }
+
+  async setIsFolder(isFolder: boolean): Promise<void> {
+    this._isFolder = isFolder;
   }
 
   async hasPowerup(code: string): Promise<boolean> {

@@ -32,7 +32,7 @@ Practical bridge implication:
 
 - Avoid assuming a single rigid type model in response formatting.
 - Preserve structural context, because users think in outlines/documents, not only isolated nodes.
-- When a single `remType` value is needed for agents, prefer document status over concept status while preserving
+- When a single `remType` value is needed for agents, prefer folder status, then document status, while preserving
   separate card metadata such as `cardDirection`.
 
 ## Rem vs Flashcard

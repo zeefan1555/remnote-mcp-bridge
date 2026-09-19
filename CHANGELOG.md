@@ -7,6 +7,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-09-19
+
+### Fixed
+
+- Report RemNote Folder nodes as `folder` in read/search results and treat them as outline contexts, including folders
+  that also retain RemNote's document capability.
+
 ## [0.22.0] - 2026-09-19
 
 ### Fixed

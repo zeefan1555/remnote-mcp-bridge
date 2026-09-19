@@ -439,7 +439,7 @@ export interface SetDocumentStatusResult {
 }
 
 export type RemClassification =
-  'document' | 'dailyDocument' | 'concept' | 'descriptor' | 'portal' | 'text';
+  'folder' | 'document' | 'dailyDocument' | 'concept' | 'descriptor' | 'portal' | 'text';
 
 export type CardDirection = 'forward' | 'reverse' | 'bidirectional';
 export type SearchByTagContextReason =
@@ -485,6 +485,7 @@ const DEFAULT_SEARCH_CHILD_LIMIT = 20;
 
 /** Type priority for search result sorting (lower = higher priority). */
 const TYPE_PRIORITY: Record<RemClassification, number> = {
+  folder: 0,
   document: 0,
   concept: 0,
   dailyDocument: 1,
@@ -951,6 +952,7 @@ export class RemAdapter {
     documentStatusOverride?: boolean
   ): Promise<RemClassification> {
     if (await rem.hasPowerup(BuiltInPowerupCodes.DailyDocument)) return 'dailyDocument';
+    if (await rem.isFolder()) return 'folder';
     const isDocument = documentStatusOverride ?? (await rem.isDocument());
     if (isDocument) return 'document';
     if (rem.type === RemType.CONCEPT) return 'concept';
@@ -2175,7 +2177,9 @@ export class RemAdapter {
     contextType: RemClassification
   ): SearchByTagContextReason {
     if (taggedRem._id === contextRem._id) return 'self';
-    if (contextType === 'document' || contextType === 'dailyDocument') return 'ancestor-document';
+    if (contextType === 'folder' || contextType === 'document' || contextType === 'dailyDocument') {
+      return 'ancestor-document';
+    }
     if (contextType === 'concept') return 'ancestor-concept';
     return 'ancestor-context';
   }
@@ -2185,7 +2189,7 @@ export class RemAdapter {
     contextReason: SearchByTagContextReason;
   }> {
     const remType = await this.classifyRem(rem);
-    if (remType === 'document' || remType === 'dailyDocument') {
+    if (remType === 'folder' || remType === 'document' || remType === 'dailyDocument') {
       return { targetRem: rem, contextReason: 'self' };
     }
 
@@ -2198,7 +2202,7 @@ export class RemAdapter {
       }
 
       const parentType = await this.classifyRem(parentRem);
-      if (parentType === 'document' || parentType === 'dailyDocument') {
+      if (parentType === 'folder' || parentType === 'document' || parentType === 'dailyDocument') {
         return { targetRem: parentRem, contextReason: 'ancestor-document' };
       }
 
@@ -2532,6 +2536,7 @@ export class RemAdapter {
 
     if (
       value === 'document' ||
+      value === 'folder' ||
       value === 'dailyDocument' ||
       value === 'concept' ||
       value === 'descriptor' ||
@@ -2542,7 +2547,7 @@ export class RemAdapter {
     }
 
     throw new Error(
-      `${fieldName} must be one of document, dailyDocument, concept, descriptor, portal, text`
+      `${fieldName} must be one of folder, document, dailyDocument, concept, descriptor, portal, text`
     );
   }
 
@@ -2751,7 +2756,12 @@ export class RemAdapter {
     let parent = await this.getParentRem(rem);
     while (parent) {
       const parentType = await this.classifyRem(parent);
-      if (parentType === 'document' || parentType === 'dailyDocument' || parentType === 'portal') {
+      if (
+        parentType === 'folder' ||
+        parentType === 'document' ||
+        parentType === 'dailyDocument' ||
+        parentType === 'portal'
+      ) {
         return parent;
       }
       parent = await this.getParentRem(parent);
@@ -2765,7 +2775,10 @@ export class RemAdapter {
   ): Promise<Array<{ rem: PluginRem; context: PluginRem; remType: RemClassification }>> {
     const rootType = await this.classifyRem(root);
     const rootContext =
-      rootType === 'document' || rootType === 'dailyDocument' || rootType === 'portal'
+      rootType === 'folder' ||
+      rootType === 'document' ||
+      rootType === 'dailyDocument' ||
+      rootType === 'portal'
         ? root
         : ((await this.getContainingDocumentOrPortal(root)) ?? root);
     const results: Array<{
@@ -2788,7 +2801,10 @@ export class RemAdapter {
 
       const remType = await this.classifyRem(rem);
       results.push({ rem, context, remType });
-      const childContext = remType === 'document' || remType === 'dailyDocument' ? rem : context;
+      const childContext =
+        remType === 'folder' || remType === 'document' || remType === 'dailyDocument'
+          ? rem
+          : context;
       for (const child of await rem.getChildrenRem()) {
         await visit(child, childContext, depth + 1);
       }

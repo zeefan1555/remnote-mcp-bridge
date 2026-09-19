@@ -665,6 +665,24 @@ describe('RemAdapter', () => {
       expect(await portalTarget.isCollapsed(root._id)).toBe(false);
     });
 
+    it('uses folders as outline contexts', async () => {
+      const root = plugin.addTestRem('outline-folder-root', 'Folder');
+      root.setIsFolderMock(true);
+      const branch = plugin.addTestRem('outline-folder-branch', 'Branch');
+      const leaf = plugin.addTestRem('outline-folder-leaf', 'Leaf');
+      await branch.setParent(root);
+      await leaf.setParent(branch);
+
+      const applied = await adapter.setOutlineCollapsed({
+        rootRemId: root._id,
+        collapsed: true,
+        dryRun: false,
+      });
+
+      expect(applied).toMatchObject({ dryRun: false, scanned: 2, eligible: 1, changed: 1 });
+      expect(await branch.isCollapsed(root._id)).toBe(true);
+    });
+
     it('collapses portal content without treating the portal container as a target', async () => {
       const root = plugin.addTestRem('outline-cycle-root', 'Root');
       root.setIsDocumentMock(true);
@@ -3871,6 +3889,15 @@ describe('RemAdapter', () => {
 
       const result = await adapter.readNote({ remId: 'doc_type' });
       expect(result.remType).toBe('document');
+    });
+
+    it('should classify folder Rem ahead of document status', async () => {
+      const rem = plugin.addTestRem('folder_type', 'A Folder');
+      rem.setIsFolderMock(true);
+      rem.setIsDocumentMock(true);
+
+      const result = await adapter.readNote({ remId: 'folder_type' });
+      expect(result.remType).toBe('folder');
     });
 
     it('should prioritize document status over concept type', async () => {

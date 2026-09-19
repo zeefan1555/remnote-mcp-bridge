@@ -100,15 +100,16 @@ contract keeps iterations safe and predictable.
 - `remType` is a primary agent-facing role, not a complete list of every RemNote trait. A Rem can be both a
   concept/card and a document.
 - Current values:
+  - `folder`
   - `document`
   - `dailyDocument`
   - `concept`
   - `descriptor`
   - `portal`
   - `text`
-- Classification order is `dailyDocument`, then `document`, then `concept`, `descriptor`, `portal`, and `text`.
-  This means a concept/card that is also marked as a document is reported as `document`; card metadata remains exposed
-  separately when available.
+- Classification order is `dailyDocument`, then `folder`, `document`, `concept`, `descriptor`, `portal`, and `text`.
+  This means a folder that also retains RemNote's document capability is reported as `folder`; card metadata remains
+  exposed separately when available.
 - Results may be grouped/sorted by this classification for retrieval quality.
 
 ### `cardDirection` (optional)
@@ -194,7 +195,7 @@ The adapter-level renderer should preserve meaning over exact visual fidelity:
   - cursors are query-bound, `parentRemId`-bound, and `cardsOnly`-bound, and expire after bridge session inactivity;
   - the bridge retains at most 20 active search snapshots.
 - Result ordering:
-  1. grouped by `remType` priority (`document`/`concept` > `dailyDocument` > `portal` > `descriptor` > `text`)
+  1. grouped by `remType` priority (`folder`/`document`/`concept` > `dailyDocument` > `portal` > `descriptor` > `text`)
   2. preserves SDK-provided intra-group ordering as relevance proxy
 - Initial search captures an ordered snapshot of up to 1000 SDK results, deduplicates by `remId`, then returns the
   requested page size. Page content is rendered only for the current page.
@@ -219,7 +220,7 @@ The adapter-level renderer should preserve meaning over exact visual fidelity:
   renamed tags, and aliases cannot change the target tag identity.
 - If the exact `tagRemId` is valid input but does not resolve to a Rem, the result set is empty.
 - For each tagged match, bridge resolves the returned result target as:
-  1. nearest ancestor `document` / `dailyDocument` (preferred),
+  1. nearest ancestor `folder` / `document` / `dailyDocument` (preferred),
   2. otherwise nearest non-document ancestor,
   3. otherwise the tagged Rem itself (no ancestor case).
 - In `context` mode:
