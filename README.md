@@ -247,7 +247,7 @@ the CLI maps them to commands:
 | `search_by_tag`    | Search by exact tag Rem ID with ancestor context and content controls       |
 | `read_note`        | Read a note's metadata, tags, and content in markdown or structured form    |
 | `get_review_stats` | Read native review facts by exact IDs, root subtree, tag subtree, or today   |
-| `set_outline_collapsed` | Preview or apply verified outline collapse/expand                     |
+| `set_outline_collapsed` | Recursively collapse/expand a subtree in each real Document/Portal context |
 | `list_todos`       | List exact-tag todos with native todo state                                  |
 | `update_todo`      | Atomically synchronize native todo state and TODO/DONE tags                  |
 | `update_note`      | Update note title                                                           |

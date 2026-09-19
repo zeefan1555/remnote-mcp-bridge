@@ -627,6 +627,68 @@ describe('RemAdapter', () => {
       expect(await branch.isCollapsed('outline-root')).toBe(true);
     });
 
+    it('uses nested document and portal contexts across the full subtree', async () => {
+      const root = plugin.addTestRem('outline-context-root', 'Root');
+      root.setIsDocumentMock(true);
+      const nestedDocument = plugin.addTestRem('outline-nested-document', 'Nested Document');
+      nestedDocument.setIsDocumentMock(true);
+      const section = plugin.addTestRem('outline-section', 'Section');
+      const sectionLeaf = plugin.addTestRem('outline-section-leaf', 'Section Leaf');
+      const portalOne = plugin.addTestRem('outline-portal-one', 'Portal One');
+      portalOne.type = RemType.PORTAL;
+      const portalTwo = plugin.addTestRem('outline-portal-two', 'Portal Two');
+      portalTwo.type = RemType.PORTAL;
+      const portalTarget = plugin.addTestRem('outline-portal-target', 'Portal Target');
+      const portalLeaf = plugin.addTestRem('outline-portal-leaf', 'Portal Leaf');
+
+      await nestedDocument.setParent(root);
+      await section.setParent(nestedDocument);
+      await sectionLeaf.setParent(section);
+      await portalOne.setParent(root);
+      await portalTwo.setParent(root);
+      await portalLeaf.setParent(portalTarget);
+      portalOne.setReferencedRemsMock([portalTarget]);
+      portalTwo.setReferencedRemsMock([portalTarget]);
+
+      const applied = await adapter.setOutlineCollapsed({
+        rootRemId: root._id,
+        collapsed: true,
+        dryRun: false,
+      });
+
+      expect(applied).toMatchObject({ dryRun: false, scanned: 9, eligible: 4, changed: 4 });
+      expect(await nestedDocument.isCollapsed(root._id)).toBe(true);
+      expect(await section.isCollapsed(nestedDocument._id)).toBe(true);
+      expect(await section.isCollapsed(root._id)).toBe(false);
+      expect(await portalTarget.isCollapsed(portalOne._id)).toBe(true);
+      expect(await portalTarget.isCollapsed(portalTwo._id)).toBe(true);
+      expect(await portalTarget.isCollapsed(root._id)).toBe(false);
+    });
+
+    it('collapses portal content without treating the portal container as a target', async () => {
+      const root = plugin.addTestRem('outline-cycle-root', 'Root');
+      root.setIsDocumentMock(true);
+      const target = plugin.addTestRem('outline-cycle-target', 'Target');
+      const portal = plugin.addTestRem('outline-cycle-portal', 'Portal');
+      portal.type = RemType.PORTAL;
+      const placeholder = plugin.addTestRem('outline-cycle-placeholder', 'Placeholder');
+
+      await target.setParent(root);
+      await portal.setParent(target);
+      await placeholder.setParent(portal);
+      portal.setReferencedRemsMock([target]);
+
+      await adapter.setOutlineCollapsed({
+        rootRemId: root._id,
+        collapsed: true,
+        dryRun: false,
+      });
+
+      expect(await portal.isCollapsed(root._id)).toBe(false);
+      expect(await target.isCollapsed(portal._id)).toBe(true);
+      expect(await portal.isCollapsed(portal._id)).toBe(false);
+    });
+
     it('allows outline preview but blocks apply when writes are disabled', async () => {
       const root = plugin.addTestRem('outline-locked-root', 'Root');
       const branch = plugin.addTestRem('outline-locked-branch', 'Branch');

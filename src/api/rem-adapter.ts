@@ -2760,6 +2760,60 @@ export class RemAdapter {
     return undefined;
   }
 
+  private async getOutlineRemContexts(
+    root: PluginRem
+  ): Promise<Array<{ rem: PluginRem; context: PluginRem; remType: RemClassification }>> {
+    const rootType = await this.classifyRem(root);
+    const rootContext =
+      rootType === 'document' || rootType === 'dailyDocument' || rootType === 'portal'
+        ? root
+        : ((await this.getContainingDocumentOrPortal(root)) ?? root);
+    const results: Array<{
+      rem: PluginRem;
+      context: PluginRem;
+      remType: RemClassification;
+    }> = [];
+    const visited = new Set<string>();
+
+    const visit = async (rem: PluginRem, context: PluginRem, depth: number): Promise<void> => {
+      if (depth >= MAX_DESCENDANT_DEPTH_CHECK) {
+        throw new Error(
+          `Outline traversal exceeded ${MAX_DESCENDANT_DEPTH_CHECK} levels. Traversal stopped to prevent circular portal references.`
+        );
+      }
+
+      const key = `${rem._id}:${context._id}`;
+      if (visited.has(key)) return;
+      visited.add(key);
+
+      const remType = await this.classifyRem(rem);
+      results.push({ rem, context, remType });
+      const childContext = remType === 'document' || remType === 'dailyDocument' ? rem : context;
+      for (const child of await rem.getChildrenRem()) {
+        await visit(child, childContext, depth + 1);
+      }
+
+      if (remType === 'portal') {
+        for (const referencedRem of await rem.remsBeingReferenced()) {
+          const includedRem = await this.plugin.rem.findOne(referencedRem._id);
+          if (includedRem) await visit(includedRem, rem, depth + 1);
+        }
+      }
+    };
+
+    for (const child of await root.getChildrenRem()) {
+      await visit(child, rootContext, 0);
+    }
+    if (rootType === 'portal') {
+      for (const referencedRem of await root.remsBeingReferenced()) {
+        const includedRem = await this.plugin.rem.findOne(referencedRem._id);
+        if (includedRem) await visit(includedRem, root, 0);
+      }
+    }
+
+    return results;
+  }
+
   private async collapseCreatedNonLeafRems(rems: PluginRem[]): Promise<void> {
     for (const rem of rems) {
       if (!(await this.hasDirectContentChildren(rem))) continue;
@@ -4122,15 +4176,15 @@ export class RemAdapter {
       );
     }
 
-    const descendants = (await root.allRemInDocumentOrPortal()).filter(
-      (rem) => rem._id !== root._id
-    );
-    const candidates: Array<{ rem: PluginRem; item: OutlineItem }> = [];
-    for (const rem of descendants) {
+    const descendants = await this.getOutlineRemContexts(root);
+    const candidates: Array<{ rem: PluginRem; context: PluginRem; item: OutlineItem }> = [];
+    for (const { rem, context, remType } of descendants) {
+      if (remType === 'portal' || rem._id === context._id) continue;
       if ((await rem.getChildrenRem()).length === 0) continue;
-      const oldIsCollapsed = await rem.isCollapsed(root._id);
+      const oldIsCollapsed = await rem.isCollapsed(context._id);
       candidates.push({
         rem,
+        context,
         item: {
           remId: rem._id,
           title: (await this.getTitleAndDetail(rem)).title,
@@ -4142,15 +4196,15 @@ export class RemAdapter {
     }
 
     if (!dryRun) {
-      await this.runInTransaction(async () => {
-        for (const candidate of candidates) {
-          if (!candidate.item.changed) continue;
-          await candidate.rem.setIsCollapsed(collapsed, root._id);
-          if ((await candidate.rem.isCollapsed(root._id)) !== collapsed) {
-            throw new Error(`Failed to update collapsed state for Rem ${candidate.rem._id}`);
-          }
+      for (const candidate of candidates) {
+        if (!candidate.item.changed) continue;
+        await candidate.rem.setIsCollapsed(collapsed, candidate.context._id);
+        if ((await candidate.rem.isCollapsed(candidate.context._id)) !== collapsed) {
+          throw new Error(
+            `Failed to update collapsed state for Rem ${candidate.rem._id} in context ${candidate.context._id}`
+          );
         }
-      });
+      }
     }
 
     return {

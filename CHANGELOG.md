@@ -7,6 +7,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-09-19
+
+### Fixed
+
+- Resolve the actual nested Document or Portal context for every Rem in recursive outline collapse/expand operations,
+  including the same target shown through multiple Portals.
+
 ## [0.21.0] - 2026-09-19
 
 ### Changed

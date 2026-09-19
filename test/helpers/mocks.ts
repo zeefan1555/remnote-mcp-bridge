@@ -133,6 +133,7 @@ export class MockRem {
   private _isTodo = false;
   private _todoStatus: 'Finished' | 'Unfinished' | undefined;
   private _collapsedByPortal = new Map<string, boolean>();
+  private _referencedRems: MockRem[] = [];
 
   constructor(id: string, text: string) {
     this._id = id;
@@ -391,6 +392,14 @@ export class MockRem {
   async setIsCollapsed(isCollapsed: boolean, portalId: string): Promise<boolean> {
     this._collapsedByPortal.set(portalId, isCollapsed);
     return isCollapsed;
+  }
+
+  setReferencedRemsMock(rems: MockRem[]): void {
+    this._referencedRems = rems;
+  }
+
+  async remsBeingReferenced(): Promise<MockRem[]> {
+    return this._referencedRems;
   }
 
   async remove(): Promise<void> {
