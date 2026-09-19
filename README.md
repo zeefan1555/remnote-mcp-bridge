@@ -242,7 +242,7 @@ the CLI maps them to commands:
 
 | Action             | Description                                                                 |
 | ------------------ | --------------------------------------------------------------------------- |
-| `create_note`      | Create notes, markdown trees, or flashcards with optional exact tag Rem IDs |
+| `create_note`      | Create notes or trees and auto-collapse newly created non-leaf Rems         |
 | `search`           | Search with optional card-only filtering and native review facts            |
 | `search_by_tag`    | Search by exact tag Rem ID with ancestor context and content controls       |
 | `read_note`        | Read a note's metadata, tags, and content in markdown or structured form    |
@@ -251,10 +251,10 @@ the CLI maps them to commands:
 | `list_todos`       | List exact-tag todos with native todo state                                  |
 | `update_todo`      | Atomically synchronize native todo state and TODO/DONE tags                  |
 | `update_note`      | Update note title                                                           |
-| `insert_children`  | Insert child Rems at deterministic positions                                |
-| `replace_children` | Replace direct content children while preserving parent metadata             |
+| `insert_children`  | Insert child Rems and auto-collapse newly created non-leaf Rems              |
+| `replace_children` | Replace direct children and auto-collapse newly created non-leaf Rems        |
 | `update_tags`      | Add or remove tags by exact tag Rem ID                                      |
-| `append_journal`   | Add markdown content to today's daily document with optional tag Rem IDs    |
+| `append_journal`   | Add journal content and auto-collapse newly created non-leaf Rems            |
 | `read_table`       | Read Advanced Table columns, rows, and typed property metadata              |
 | `get_status`       | Check connection status                                                     |
 

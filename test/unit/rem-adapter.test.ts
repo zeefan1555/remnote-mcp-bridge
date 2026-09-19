@@ -129,6 +129,27 @@ describe('RemAdapter', () => {
       expect(await children[0].isDocument()).toBe(false);
     });
 
+    it('should collapse created non-leaf Rems in their containing document context', async () => {
+      const outerDocument = plugin.addTestRem('outer_document', 'Outer Document');
+      outerDocument.setIsDocumentMock(true);
+
+      const result = await adapter.createNote({
+        title: 'Nested Document',
+        content: 'Section\n  Detail',
+        parentId: outerDocument._id,
+        asDocument: true,
+      });
+
+      const nestedDocument = await plugin.rem.findOne(result.remIds[0]);
+      const section = await plugin.rem.findOne(result.remIds[1]);
+      const detail = await plugin.rem.findOne(result.remIds[2]);
+
+      expect(await nestedDocument!.isCollapsed(outerDocument._id)).toBe(true);
+      expect(await section!.isCollapsed(nestedDocument!._id)).toBe(true);
+      expect(await section!.isCollapsed(outerDocument._id)).toBe(false);
+      expect(await detail!.isCollapsed(nestedDocument!._id)).toBe(false);
+    });
+
     it('should reject asDocument for content-only creation', async () => {
       await expect(
         adapter.createNote({
@@ -2927,6 +2948,22 @@ describe('RemAdapter', () => {
       const children = await parent.getChildrenRem();
       expect(children.map((c) => c.text?.[0])).toEqual(['Old line', 'New line 1', 'New line 2']);
       expect(children[0]._id).toBe('old_child_last');
+    });
+
+    it('should collapse inserted non-leaf Rems in the parent document context', async () => {
+      const document = plugin.addTestRem('insert_document', 'Document');
+      document.setIsDocumentMock(true);
+
+      const result = await adapter.insertChildren({
+        parentRemId: document._id,
+        content: 'Section\n  Detail',
+        position: 'last',
+      });
+
+      const section = await plugin.rem.findOne(result.remIds[0]);
+      const detail = await plugin.rem.findOne(result.remIds[1]);
+      expect(await section!.isCollapsed(document._id)).toBe(true);
+      expect(await detail!.isCollapsed(document._id)).toBe(false);
     });
 
     it('should insert children before a sibling', async () => {

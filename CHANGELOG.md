@@ -7,6 +7,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-09-19
+
+### Changed
+
+- Automatically collapse newly created non-leaf Rems from note creation, child insertion/replacement, and journal
+  actions in their nearest containing Document, daily note, or Portal, with immediate readback verification.
+
 ## [0.20.0] - 2026-09-18
 
 ### Added

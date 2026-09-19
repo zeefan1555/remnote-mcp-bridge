@@ -2736,6 +2736,44 @@ export class RemAdapter {
     }
   }
 
+  private async hasDirectContentChildren(rem: PluginRem): Promise<boolean> {
+    const [children, aliases] = await Promise.all([rem.getChildrenRem(), rem.getAliases()]);
+    const aliasRemIds = new Set(aliases.map((aliasRem) => aliasRem._id));
+
+    for (const child of children) {
+      if (!(await this.isProtectedParentMetadataChild(child, aliasRemIds))) return true;
+    }
+
+    return false;
+  }
+
+  private async getContainingDocumentOrPortal(rem: PluginRem): Promise<PluginRem | undefined> {
+    let parent = await this.getParentRem(rem);
+    while (parent) {
+      const parentType = await this.classifyRem(parent);
+      if (parentType === 'document' || parentType === 'dailyDocument' || parentType === 'portal') {
+        return parent;
+      }
+      parent = await this.getParentRem(parent);
+    }
+
+    return undefined;
+  }
+
+  private async collapseCreatedNonLeafRems(rems: PluginRem[]): Promise<void> {
+    for (const rem of rems) {
+      if (!(await this.hasDirectContentChildren(rem))) continue;
+
+      const context = await this.getContainingDocumentOrPortal(rem);
+      if (!context) continue;
+
+      await rem.setIsCollapsed(true, context._id);
+      if (!(await rem.isCollapsed(context._id))) {
+        throw new Error(`Failed to collapse created Rem ${rem._id} in context ${context._id}`);
+      }
+    }
+  }
+
   /**
    * Normalize content before passing to create note.
    * Removes all blank lines.
@@ -2881,6 +2919,8 @@ export class RemAdapter {
         remId: rem._id,
       });
     }
+
+    await this.collapseCreatedNonLeafRems(createdRems);
 
     this.logDiagnosticTrace(diagnosticTrace, 'markdown_tree:done', {
       createdRemCount: createdRems.length,
@@ -3088,6 +3128,8 @@ export class RemAdapter {
           }
         }
 
+        await this.collapseCreatedNonLeafRems([titleRem]);
+
         return { remIds, titles };
       });
     } else if (hasContent) {
@@ -3194,6 +3236,9 @@ export class RemAdapter {
         } else {
           await this.addTagRemIdsToTopLevelRems(createdRems, dailyDoc._id, tagRemIds);
         }
+      }
+      if (journalRootRem) {
+        await this.collapseCreatedNonLeafRems([journalRootRem]);
       }
       const results = await this.extractRemResults(createdRems);
       remIds.push(...results.remIds);
