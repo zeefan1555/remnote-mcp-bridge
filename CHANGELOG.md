@@ -7,6 +7,18 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-10-02
+
+### Added
+
+- Bounded context/verification actions with explicit content projection, strict inverse tag
+  evidence and fail-closed completeness. No hidden date calls or content caching.
+- Preview-first typed flashcard/Wiki tasks with exact IDs, native references, metadata
+  recovery, durable scaffold semantics and complete Wiki/index checks. All fresh write
+  guards run before mutations; uncertain creates never auto-retry, and external edits
+  are not restored. No atomic rollback or exactly-once guarantee.
+- SDK version/catalog hash signaling and expected-hash checks for capability caching.
+
 ## [0.23.0] - 2026-09-19
 
 ### Fixed

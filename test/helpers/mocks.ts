@@ -135,10 +135,31 @@ export class MockRem {
   private _todoStatus: 'Finished' | 'Unfinished' | undefined;
   private _collapsedByPortal = new Map<string, boolean>();
   private _referencedRems: MockRem[] = [];
+  private _isCardItem = false;
+  private taskLookup?: (id: string) => MockRem | undefined;
+  private taskAll?: () => MockRem[];
 
   constructor(id: string, text: string) {
     this._id = id;
     this.text = [text];
+  }
+
+  /** Opt-in native graph semantics for task regressions; legacy fixtures remain unchanged. */
+  enableTaskSemantics(lookup: (id: string) => MockRem | undefined, all: () => MockRem[]): void {
+    this.taskLookup = lookup;
+    this.taskAll = all;
+  }
+  setIsCardItemMock(value: boolean): void {
+    this._isCardItem = value;
+  }
+  async isCardItem(): Promise<boolean> {
+    return this._isCardItem;
+  }
+  async addPowerup(code: string): Promise<void> {
+    if (!this._powerups.includes(code)) this._powerups.push(code);
+  }
+  async removePowerup(code: string): Promise<void> {
+    this._powerups = this._powerups.filter((value) => value !== code);
   }
 
   /** Configure mock to behave as a document */
@@ -193,7 +214,9 @@ export class MockRem {
   }
 
   async taggedRem(): Promise<MockRem[]> {
-    return this._taggedRems;
+    return this.taskAll
+      ? this.taskAll().filter((rem) => rem.getTags().includes(this._id))
+      : this._taggedRems;
   }
 
   setTagRemsMock(tagRems: MockRem[]): void {
@@ -373,7 +396,7 @@ export class MockRem {
       this.tags.push(tagId);
     }
     if (!this._tagRems.some((tag) => tag._id === tagId)) {
-      this._tagRems.push(new MockRem(tagId, tagId));
+      this._tagRems.push(this.taskLookup?.(tagId) ?? new MockRem(tagId, tagId));
     }
   }
 
@@ -413,7 +436,24 @@ export class MockRem {
   }
 
   async remsBeingReferenced(): Promise<MockRem[]> {
-    return this._referencedRems;
+    if (!this.taskLookup) return this._referencedRems;
+    const ids = new Set<string>();
+    const collect = (value: unknown): void => {
+      if (Array.isArray(value)) {
+        value.forEach(collect);
+        return;
+      }
+      if (!value || typeof value !== 'object') return;
+      const record = value as Record<string, unknown>;
+      if (record.i === 'q' && typeof record._id === 'string') ids.add(record._id);
+      Object.values(record).forEach(collect);
+    };
+    collect(this.text);
+    collect(this.backText);
+    return [...ids].flatMap((id) => {
+      const rem = this.taskLookup!(id);
+      return rem ? [rem] : [];
+    });
   }
 
   async remove(): Promise<void> {
@@ -441,15 +481,42 @@ export class MockRemNotePlugin {
   private rems = new Map<string, MockRem>();
   private remsByName = new Map<string, MockRem>();
   private nextId = 1;
+  private taskSemantics = false;
+  enableTaskSemantics(): void {
+    this.taskSemantics = true;
+    for (const rem of this.rems.values())
+      rem.enableTaskSemantics(
+        (id) => this.rems.get(id),
+        () => [...this.rems.values()]
+      );
+  }
+  private makeRem(id: string, text: string): MockRem {
+    const rem = new MockRem(id, text);
+    if (this.taskSemantics)
+      rem.enableTaskSemantics(
+        (target) => this.rems.get(target),
+        () => [...this.rems.values()]
+      );
+    return rem;
+  }
+
   private eventListeners = new Map<
     string,
     Array<{ listenerKey: string | undefined; callback: (event: unknown) => void }>
   >();
 
+  kb = { getCurrentKnowledgeBaseData: vi.fn(async () => ({ _id: 'test-kb', name: 'Test KB' })) };
+
   rem = {
+    findMany: vi.fn(async (ids: string[]): Promise<MockRem[]> =>
+      ids.flatMap((id) => {
+        const rem = this.rems.get(id);
+        return rem ? [rem] : [];
+      })
+    ),
     createRem: vi.fn(async (): Promise<MockRem> => {
       const id = `rem_${this.nextId++}`;
-      const rem = new MockRem(id, '');
+      const rem = this.makeRem(id, '');
       this.rems.set(id, rem);
       return rem;
     }),
@@ -467,7 +534,7 @@ export class MockRemNotePlugin {
       async (markdown: string, parentId?: string): Promise<MockRem> => {
         const id = `rem_single_${this.nextId++}`;
         const richText = await this.richText.parseFromMarkdown(markdown);
-        const rem = new MockRem(id, '');
+        const rem = this.makeRem(id, '');
         rem.text = richText;
         this.rems.set(id, rem);
         if (parentId) {
@@ -505,7 +572,13 @@ export class MockRemNotePlugin {
         for (const line of lines) {
           const level = levelOf(line.indent);
           const id = `rem_md_${this.nextId++}`;
-          const rem = new MockRem(id, line.text);
+          const rem = this.makeRem(id, line.text);
+          if (this.taskSemantics && /\s===\s*$/.test(line.text)) {
+            rem.text = [line.text.replace(/\s===\s*$/, '')];
+            rem.setIsCardItemMock(true);
+            rem.setPracticeDirectionMock('forward');
+            rem.setCardsMock([new MockCard(`card_${id}`, id, 'forward', 1, [])]);
+          }
           this.rems.set(id, rem);
           allCreated.push(rem);
 
@@ -688,6 +761,13 @@ export class MockRemNotePlugin {
   };
 
   storage = {
+    setLocal: vi.fn(async (key: string, value: unknown): Promise<void> => {
+      this.localStorageStore.set(key, structuredClone(value));
+    }),
+    getLocal: vi.fn(async <T = unknown>(key: string): Promise<T | undefined> => {
+      const value = this.localStorageStore.get(key);
+      return value === undefined ? undefined : (structuredClone(value) as T);
+    }),
     setSession: vi.fn(async (key: string, value: unknown): Promise<void> => {
       this.sessionStorageStore.set(key, value);
       this.emitEvent('storage.session.changed', value, key);
@@ -718,6 +798,7 @@ export class MockRemNotePlugin {
   // Helper methods
   private settingsStore = new Map<string, unknown>();
   private sessionStorageStore = new Map<string, unknown>();
+  private localStorageStore = new Map<string, unknown>();
 
   private getSettingValue(id: string): unknown {
     return this.settingsStore.get(id);
@@ -728,7 +809,7 @@ export class MockRemNotePlugin {
   }
 
   addTestRem(id: string, text: string, name?: string): MockRem {
-    const rem = new MockRem(id, text);
+    const rem = this.makeRem(id, text);
     this.rems.set(id, rem);
     if (name) {
       this.remsByName.set(name, rem);
@@ -741,6 +822,7 @@ export class MockRemNotePlugin {
     this.remsByName.clear();
     this.settingsStore.clear();
     this.sessionStorageStore.clear();
+    this.localStorageStore.clear();
     this.eventListeners.clear();
     this.nextId = 1;
   }

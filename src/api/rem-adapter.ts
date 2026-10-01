@@ -28,6 +28,20 @@ import {
   type SdkCapabilitiesResult,
 } from './sdk-executor';
 
+import {
+  inspectMany,
+  verifyScope,
+  type InspectManyParams,
+  type VerifyScopeParams,
+} from './inspection';
+import {
+  TaskOperations,
+  type TaskApplyParams,
+  type FlashcardsPlan,
+  type WikiPlan,
+} from './task-operations';
+import { cardDelimiterIndex } from './card-structure';
+
 // Build-time constant injected by webpack DefinePlugin
 declare const __PLUGIN_VERSION__: string;
 
@@ -605,6 +619,7 @@ export class RemAdapter {
   private readonly searchCursorSnapshots = new Map<string, SearchCursorSnapshot>();
   private readonly searchByTagCursorSnapshots = new Map<string, SearchByTagCursorSnapshot>();
   private nextDiagnosticSequence = 1;
+  private taskOperations?: TaskOperations;
 
   constructor(
     private plugin: ReactRNPlugin,
@@ -644,6 +659,30 @@ export class RemAdapter {
 
   async sdkCall(params: SdkCallParams): Promise<SdkCallResult> {
     return await executeSdkCall(this.plugin, this.settings.acceptWriteOperations, params);
+  }
+
+  inspectMany(params: InspectManyParams) {
+    return inspectMany(this.plugin, params);
+  }
+  verifyScope(params: VerifyScopeParams) {
+    return verifyScope(this.plugin, params);
+  }
+  private tasks(): TaskOperations {
+    return (this.taskOperations ??= new TaskOperations({
+      plugin: this.plugin,
+      canWrite: () => this.settings.acceptWriteOperations,
+      createNote: (params) => this.createNote(params),
+    }));
+  }
+  applyFlashcards(params: TaskApplyParams<FlashcardsPlan>) {
+    return this.tasks().apply('flashcards', params);
+  }
+  applyWiki(params: TaskApplyParams<WikiPlan>) {
+    return this.tasks().apply('wiki', params);
+  }
+  private assertWriteEnabled(): void {
+    if (!this.settings.acceptWriteOperations)
+      throw new Error('Write operations are disabled in Automation Bridge settings');
   }
 
   private mergeInlineRefs(...refGroups: InlineReference[][]): InlineReference[] {
@@ -1003,19 +1042,8 @@ export class RemAdapter {
     }));
   }
 
-  private getCardDelimiterIndex(richText: RichTextInterface | undefined): number {
-    if (!richText || !Array.isArray(richText)) return -1;
-    return richText.findIndex(
-      (element) =>
-        typeof element === 'object' &&
-        element !== null &&
-        'i' in (element as Record<string, unknown>) &&
-        (element as Record<string, unknown>).i === 's'
-    );
-  }
-
   private async getTitleAndDetail(rem: PluginRem): Promise<TitleDetailRenderResult> {
-    const delimiterIndex = this.getCardDelimiterIndex(rem.text);
+    const delimiterIndex = cardDelimiterIndex(rem.text);
     if (delimiterIndex >= 0 && Array.isArray(rem.text)) {
       const front = await this.renderRichText(
         rem.text.slice(0, delimiterIndex) as RichTextInterface
@@ -2397,6 +2425,7 @@ export class RemAdapter {
   }
 
   private async runInTransaction<T>(fn: () => Promise<T>): Promise<T> {
+    this.assertWriteEnabled();
     return await this.plugin.app.transaction(fn);
   }
 
@@ -2467,18 +2496,20 @@ export class RemAdapter {
     }
 
     if (rem.text) {
-      await rem.setText(
-        await this.replaceIdReferenceTokensInRichText(rem.text, preparedMarkdown.idReferenceTokens)
+      const text = await this.replaceIdReferenceTokensInRichText(
+        rem.text,
+        preparedMarkdown.idReferenceTokens
       );
+      this.assertWriteEnabled();
+      await rem.setText(text);
     }
-
     if (rem.backText) {
-      await rem.setBackText(
-        await this.replaceIdReferenceTokensInRichText(
-          rem.backText,
-          preparedMarkdown.idReferenceTokens
-        )
+      const back = await this.replaceIdReferenceTokensInRichText(
+        rem.backText,
+        preparedMarkdown.idReferenceTokens
       );
+      this.assertWriteEnabled();
+      await rem.setBackText(back);
     }
   }
 
@@ -2495,6 +2526,7 @@ export class RemAdapter {
     preparedMarkdown: PreparedMarkdown,
     parentId?: string
   ): Promise<PluginRem> {
+    this.assertWriteEnabled();
     const rem = await this.plugin.rem.createSingleRemWithMarkdown(
       preparedMarkdown.markdown,
       parentId
@@ -2598,6 +2630,7 @@ export class RemAdapter {
     const normalizedPrimaryTitle = this.normalizeAliasText(primaryTitle);
     for (const alias of aliases) {
       if (alias === normalizedPrimaryTitle) continue;
+      this.assertWriteEnabled();
       const aliasRem = await rem.getOrCreateAliasWithText(this.textToRichText(alias));
       if (!aliasRem) {
         throw new Error(`Failed to create alias: ${alias}`);
@@ -2632,6 +2665,7 @@ export class RemAdapter {
     const normalizedPrimaryTitle = this.normalizeAliasText(primaryTitle);
     for (const alias of addAliases) {
       if (alias === normalizedPrimaryTitle || existingByNormalizedText.has(alias)) continue;
+      this.assertWriteEnabled();
       const aliasRem = await rem.getOrCreateAliasWithText(this.textToRichText(alias));
       if (!aliasRem) {
         throw new Error(`Failed to create alias: ${alias}`);
@@ -2650,6 +2684,7 @@ export class RemAdapter {
 
   private async addTagRemIdsToRem(rem: PluginRem, tagRemIds: string[]): Promise<void> {
     for (const tagRemId of tagRemIds) {
+      this.assertWriteEnabled();
       await rem.addTag(tagRemId);
     }
   }
@@ -2717,6 +2752,7 @@ export class RemAdapter {
       throw new Error('Document status updates are unsupported by the current RemNote SDK');
     }
 
+    this.assertWriteEnabled();
     await rem.setIsDocument(isDocument);
   }
 
@@ -2837,6 +2873,7 @@ export class RemAdapter {
       const context = await this.getContainingDocumentOrPortal(rem);
       if (!context) continue;
 
+      this.assertWriteEnabled();
       await rem.setIsCollapsed(true, context._id);
       if (!(await rem.isCollapsed(context._id))) {
         throw new Error(`Failed to collapse created Rem ${rem._id} in context ${context._id}`);
@@ -2912,6 +2949,7 @@ export class RemAdapter {
       parentId,
       dummyMarkdownLength: dummyMarkdown.length,
     });
+    this.assertWriteEnabled();
     const tree = (await this.plugin.rem.createTreeWithMarkdown(dummyMarkdown, parentId)) || [];
     this.logDiagnosticTrace(diagnosticTrace, 'create_tree_with_markdown:done', {
       treeLength: tree.length,
@@ -2963,6 +3001,7 @@ export class RemAdapter {
           targetParentId: targetParent._id,
           targetPosition,
         });
+        this.assertWriteEnabled();
         await child.setParent(targetParent, targetPosition);
         this.logDiagnosticTrace(diagnosticTrace, 'child_reparent:done', {
           childId: child._id,
@@ -2974,6 +3013,7 @@ export class RemAdapter {
 
     // Important: remove the dummy root.
     this.logDiagnosticTrace(diagnosticTrace, 'dummy_remove:start', { dummyRootId: dummyRoot._id });
+    this.assertWriteEnabled();
     await dummyRoot.remove();
     this.logDiagnosticTrace(diagnosticTrace, 'dummy_remove:done', { dummyRootId: dummyRoot._id });
 
@@ -3970,6 +4010,7 @@ export class RemAdapter {
     }
 
     for (const tagRemId of addTagRemIds) {
+      this.assertWriteEnabled();
       await rem.addTag(tagRemId);
     }
 
@@ -4006,6 +4047,7 @@ export class RemAdapter {
     const normalizedValue = await this.normalizeSetPropertyValue(params.value);
 
     await this.runInTransaction(async () => {
+      this.assertWriteEnabled();
       await rem.addTag(tagRemId);
       await rem.setTagPropertyValue(propertyRemId, normalizedValue.richText);
     });

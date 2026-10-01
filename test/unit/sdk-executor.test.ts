@@ -1,8 +1,46 @@
+import { createHash } from 'node:crypto';
+import { SDK_CATALOG_HASH } from '../../src/api/sdk-capabilities.generated';
 import { describe, expect, it, vi } from 'vitest';
 import { executeSdkCall, getSdkCapabilities } from '../../src/api/sdk-executor';
 import { MockRemNotePlugin } from '../helpers/mocks';
 
 describe('SDK executor', () => {
+  it('binds catalog contents and execution to the live generated SHA256', async () => {
+    const result = getSdkCapabilities();
+    expect(result.sdkCatalogHash).toBe(
+      createHash('sha256')
+        .update(
+          JSON.stringify({ sdkVersion: result.sdkVersion, capabilities: result.capabilities })
+        )
+        .digest('hex')
+    );
+    const plugin = new MockRemNotePlugin();
+    const lookup = vi.spyOn(plugin.rem, 'findOne');
+    await expect(
+      executeSdkCall(plugin as never, true, {
+        capability: 'rem:getChildrenRem',
+        targetId: 'r',
+        expectedCatalogHash: '0'.repeat(64),
+      })
+    ).rejects.toThrow('catalog hash');
+    expect(lookup).not.toHaveBeenCalled();
+  });
+  it('rechecks expected catalog identity after awaited lookup and before invocation', async () => {
+    const plugin = new MockRemNotePlugin();
+    plugin.addTestRem('r', 'Title');
+    const params = {
+      capability: 'rem:getChildrenRem',
+      targetId: 'r',
+      expectedCatalogHash: SDK_CATALOG_HASH,
+    };
+    const rem = await plugin.rem.findOne('r');
+    vi.spyOn(plugin.rem, 'findOne').mockImplementation(async () => {
+      params.expectedCatalogHash = '0'.repeat(64);
+      return rem;
+    });
+    await expect(executeSdkCall(plugin as never, true, params)).rejects.toThrow('catalog hash');
+  });
+
   it('keeps the generated SDK 0.0.46 registry complete and current', () => {
     const result = getSdkCapabilities();
 

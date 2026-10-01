@@ -1,3 +1,4 @@
+import { REMNOTE_SDK_VERSION, SDK_CATALOG_HASH } from '../api/sdk-capabilities.generated';
 /**
  * WebSocket Client with automatic reconnection
  * Connects to the automation bridge server and handles message routing
@@ -35,6 +36,8 @@ export interface BridgeResponse {
 export interface HelloMessage {
   type: 'hello';
   version: string;
+  sdkVersion: string;
+  sdkCatalogHash: string;
 }
 
 export interface CompanionInfo {
@@ -132,6 +135,8 @@ export class WebSocketClient {
     const hello: HelloMessage = {
       type: 'hello',
       version: this.config.pluginVersion,
+      sdkVersion: REMNOTE_SDK_VERSION,
+      sdkCatalogHash: SDK_CATALOG_HASH,
     };
     try {
       this.ws?.send(JSON.stringify(hello));

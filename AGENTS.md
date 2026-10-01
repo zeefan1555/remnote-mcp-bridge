@@ -26,6 +26,9 @@ discontinued; maintained CLI code lives in `remnote-mcp-server/src/remnote-cli/`
 
 ### External Bridge Action Surface
 
+- `inspect_many`, `verify_scope` — bounded read-only task receipts
+- `flashcards_apply`, `wiki_apply` — preview-first typed writes and metadata recovery
+
 - `create_note` (simple note creation, optional root document status, hierarchical markdown import, markdown flashcards)
 - `search` (optional card-only filtering and native review facts)
 - `search_by_tag`
@@ -66,6 +69,10 @@ Before changing `search`/`read` output semantics, read:
 - `src/widgets/mcp_bridge.tsx` - bridge action dispatcher + UI panel state
 - `src/bridge/websocket-client.ts` - WS lifecycle, reconnect backoff, `hello`
 - `src/api/rem-adapter.ts` - action execution against RemNote SDK
+- `src/api/inspection.ts` - bounded snapshots and verification
+- `src/api/task-operations.ts` - typed writes and recovery
+- `src/api/card-structure.ts` - shared native card-structure predicate
+- `docs/reference/remnote/task-command-contract.md` - composite safety/contract
 - `src/settings.ts` - plugin settings keys/defaults
 - `public/manifest.json` - plugin metadata/version
 

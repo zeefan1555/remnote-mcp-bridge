@@ -1,3 +1,4 @@
+import { REMNOTE_SDK_VERSION, SDK_CATALOG_HASH } from '../../src/api/sdk-capabilities.generated';
 /**
  * Tests for WebSocket Client
  */
@@ -117,6 +118,8 @@ describe('WebSocketClient', () => {
       expect(parsed).toEqual({
         type: 'hello',
         version: '0.5.0',
+        sdkVersion: REMNOTE_SDK_VERSION,
+        sdkCatalogHash: SDK_CATALOG_HASH,
       });
     });
 
