@@ -9,6 +9,7 @@ import {
 } from '../../src/bridge/runtime';
 import { MockCard, MockRem, MockRemNotePlugin, MockWebSocket } from '../helpers/mocks';
 import { RemAdapter } from '../../src/api/rem-adapter';
+import { SDK_CATALOG_HASH } from '../../src/api/sdk-capabilities.generated';
 import {
   DEVTOOLS_EXECUTE_EVENT,
   DEVTOOLS_RESULT_EVENT,
@@ -707,4 +708,41 @@ describe('Bridge runtime', () => {
 
     searchSpy.mockRestore();
   });
+  it.each([false, true])(
+    'preserves expected catalog hash through real SDK dispatch (matches: %s)',
+    async (matches) => {
+      const target = plugin.addTestRem('catalog-target', 'Before');
+      const setter = vi.spyOn(target, 'setText');
+      runtime = await initializeBridgeRuntime(plugin as never);
+      await vi.waitFor(() =>
+        expect(MockWebSocket.instances[0].readyState).toBe(MockWebSocket.OPEN)
+      );
+      const socket = MockWebSocket.instances[0];
+      socket.simulateMessage({
+        id: 'catalog-dispatch',
+        action: 'sdk_call',
+        payload: {
+          capability: 'rem:setText',
+          targetId: target._id,
+          args: [['After']],
+          expectedCatalogHash: matches ? SDK_CATALOG_HASH : '0'.repeat(64),
+        },
+      });
+      await vi.waitFor(() =>
+        expect(socket.sentMessages.some((s) => JSON.parse(s).id === 'catalog-dispatch')).toBe(true)
+      );
+      const response = socket.sentMessages
+        .map((s) => JSON.parse(s))
+        .find((s) => s.id === 'catalog-dispatch');
+      if (matches) {
+        expect(response.error).toBeUndefined();
+        expect(target.text).toEqual(['After']);
+        expect(setter).toHaveBeenCalledTimes(1);
+      } else {
+        expect(response.error).toMatch(/catalog hash/i);
+        expect(target.text).toEqual(['Before']);
+        expect(setter).not.toHaveBeenCalled();
+      }
+    }
+  );
 });

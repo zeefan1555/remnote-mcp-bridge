@@ -686,4 +686,50 @@ describe('immediate native reference proof', () => {
     expect(result.status).not.toBe('verified');
     expect(result.complete).toBe(false);
   });
+  it.each(['alias', 'title'])(
+    'rejects a same-partition formatted %s collision before writing',
+    async (kind) => {
+      const f = await fixture(),
+        r = f.plugin.addTestRem('already', 'Different title');
+      await r.setParent(f.partition);
+      if (kind === 'alias') await r.getOrCreateAliasWithText([{ i: 'm', text: 'Page', b: true }]);
+      else r.text = [{ i: 'm', text: 'Page', b: true }];
+      const before = await f.adapter.inspectMany({ schemaVersion: 1, remIds: [r._id] });
+      expect(before.complete).toBe(true);
+      if (kind === 'alias') expect(before.objects[0].aliases).toEqual(['Page']);
+      else expect(before.objects[0].title).toBe('Page');
+      const setter = vi.spyOn(r, 'setText'),
+        out = await f.adapter.applyWiki(request(wikiPlan()));
+      expect(out.status).toBe('conflict');
+      expect(f.plugin.rem.createRem).not.toHaveBeenCalled();
+      expect(f.plugin.storage.setLocal).not.toHaveBeenCalled();
+      expect(setter).not.toHaveBeenCalled();
+    }
+  );
+  it('does not treat failed alias rendering as evidence that a name is unused', async () => {
+    const f = await fixture(),
+      r = f.plugin.addTestRem('already', 'Existing');
+    await r.setParent(f.partition);
+    await r.getOrCreateAliasWithText([{ i: 'm', text: 'Page', b: true }]);
+    f.plugin.richText.toString.mockRejectedValue(new Error('SDK renderer failed'));
+    const out = await f.adapter.applyWiki(request(wikiPlan()));
+    expect(out.status).toBe('incomplete');
+    expect(f.plugin.rem.createRem).not.toHaveBeenCalled();
+    expect(f.plugin.storage.setLocal).not.toHaveBeenCalled();
+  });
+  it('reports deep unobserved HOME ancestry incomplete instead of a false classification conflict', async () => {
+    const f = await fixture();
+    let parent = f.home;
+    for (let i = 0; i < 21; i++) {
+      const r = f.plugin.addTestRem(`level-${i}`, 'Level');
+      await r.setParent(parent);
+      parent = r;
+    }
+    await f.tag.setParent(parent);
+    const out = await f.adapter.applyFlashcards(request(flashPlan()));
+    expect(out.status).toBe('incomplete');
+    expect(out.errors[0].code).toBe('incomplete');
+    expect(f.plugin.rem.createTreeWithMarkdown).not.toHaveBeenCalled();
+    expect(f.plugin.storage.setLocal).not.toHaveBeenCalled();
+  });
 });

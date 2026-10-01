@@ -8,6 +8,7 @@ import {
 } from '@remnote/plugin-sdk';
 import { contentHash } from './content-hash';
 import { hasCardStructure } from './card-structure';
+import { plainText } from './plain-text';
 export interface InspectManyParams {
   schemaVersion: 1;
   remIds?: string[];
@@ -176,13 +177,11 @@ function flag(value: unknown): boolean {
   if (typeof value !== 'boolean') throw new Error('SDK did not return boolean');
   return value;
 }
-function title(text: unknown): string {
-  return Array.isArray(text) ? text.filter((p) => typeof p === 'string').join('') : '';
-}
-export async function inspectMany(
+/** Internal request-local evidence, never cached or serialized as public context. */
+export async function inspectWithEvidence(
   plugin: ReactRNPlugin,
   p: InspectManyParams
-): Promise<InspectionResult> {
+): Promise<{ result: InspectionResult; ancestorTails: Map<string, string> }> {
   validateInspectParams(p);
   const startedAt = new Date().toISOString();
   const result: InspectionResult = {
@@ -196,6 +195,7 @@ export async function inspectMany(
     checks: [],
     errors: [],
   };
+  const ancestorTails = new Map<string, string>();
   const max = p.maxRems ?? 1000,
     cache = new Map<string, PluginRem>(),
     failed = new Set<string>(),
@@ -356,6 +356,7 @@ export async function inspectMany(
         ancestors.push(existing._id);
         cursor = await existing.getParentRem();
       }
+      if (cursor) ancestorTails.set(id, cursor._id);
       const o: InspectionObject = {
         remId: id,
         contentIncluded: explicit.has(id),
@@ -400,8 +401,10 @@ export async function inspectMany(
       };
       if (explicit.has(id)) {
         o.text = rem.text ?? null;
-        o.title = title(rem.text);
-        o.aliases = (await rem.getAliases()).map((a) => title(a.text));
+        o.title = await plainText(plugin, rem.text);
+        o.aliases = await Promise.all(
+          (await rem.getAliases()).map((a) => plainText(plugin, a.text))
+        );
         if (rem.backText !== undefined) o.backText = rem.backText;
       }
       if (inverse.has(id)) o.taggedRemIds = inverse.get(id);
@@ -419,22 +422,30 @@ export async function inspectMany(
     if (scope.remIds.some((id) => !present.has(id))) scope.complete = false;
   if (result.scopes.some((s) => !s.complete)) result.complete = false;
   result.readWindow.finishedAt = new Date().toISOString();
-  return result;
+  return { result, ancestorTails };
+}
+export async function inspectMany(
+  plugin: ReactRNPlugin,
+  p: InspectManyParams
+): Promise<InspectionResult> {
+  return (await inspectWithEvidence(plugin, p)).result;
 }
 const equalSet = (a: string[], b: string[]) =>
   new Set(a).size === new Set(b).size && b.every((id) => a.includes(id));
 export function verifyInspection(
   result: InspectionResult,
-  p: VerifyScopeParams
+  p: VerifyScopeParams,
+  ancestorTails: ReadonlyMap<string, string>
 ): InspectionResult & { status: 'passed' | 'failed' | 'incomplete' } {
   const objects = new Map(result.objects.map((o) => [o.remId, o]));
+  const readComplete = result.complete;
   let failed = false,
     incomplete = !result.complete;
   for (const c of p.expectations) {
     const check: InspectionCheck = { kind: c.kind, remId: c.remId, status: 'incomplete' },
       o = objects.get(c.remId);
     result.checks.push(check);
-    if (!o || !result.complete) {
+    if (!o || !readComplete) {
       check.message = 'Required read evidence is incomplete';
       incomplete = true;
       continue;
@@ -451,11 +462,23 @@ export function verifyInspection(
         check.expected = c.value;
         pass = o.remType === c.value;
         break;
-      case 'ancestor':
+      case 'ancestor': {
         check.actual = o.ancestorRemIds;
         check.expected = c.value;
         pass = o.ancestorRemIds.includes(c.value);
+        const tail = ancestorTails.get(c.remId);
+        if (!pass && tail) {
+          incomplete = true;
+          result.complete = false;
+          result.truncation ??= { reason: 'ancestorDepth', remainingRemIds: [] };
+          if (!result.truncation.remainingRemIds.includes(tail))
+            result.truncation.remainingRemIds.push(tail);
+          check.message =
+            'Expected ancestor is outside the observed prefix; the remaining chain was not read';
+          continue;
+        }
         break;
+      }
       case 'powerup':
         check.actual = o.powerups[c.code];
         check.expected = c.value;
@@ -538,5 +561,6 @@ export async function verifyScope(
   p: VerifyScopeParams
 ): Promise<InspectionResult & { status: 'passed' | 'failed' | 'incomplete' }> {
   validateVerifyParams(p);
-  return verifyInspection(await inspectMany(plugin, p.inspect), p);
+  const { result, ancestorTails } = await inspectWithEvidence(plugin, p.inspect);
+  return verifyInspection(result, p, ancestorTails);
 }

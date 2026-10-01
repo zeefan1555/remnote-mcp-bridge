@@ -5,9 +5,11 @@ import {
   type RichTextInterface,
 } from '@remnote/plugin-sdk';
 import { contentHash } from './content-hash';
+import { plainText } from './plain-text';
 import { hasCardStructure } from './card-structure';
 import {
-  inspectMany,
+  inspectWithEvidence,
+  verifyInspection,
   verifyScope,
   type InspectionCheck,
   type ScopeExpectation,
@@ -590,12 +592,28 @@ export class TaskOperations {
   ): Promise<void> {
     if (kind === 'flashcards') {
       const p = input as FlashcardsPlan,
-        context = await inspectMany(this.deps.plugin, {
+        evidence = await inspectWithEvidence(this.deps.plugin, {
           schemaVersion: 1,
           remIds: [p.dailyRemId, p.homeRootId, p.tagRemId],
         });
+      const context = evidence.result;
       if (!context.complete)
         throw new TaskError('incomplete', 'Cannot read daily/HOME/tag context');
+      const ancestry = verifyInspection(
+        context,
+        {
+          schemaVersion: 1,
+          inspect: { schemaVersion: 1, remIds: [p.dailyRemId, p.homeRootId, p.tagRemId] },
+          expectations: [{ kind: 'ancestor', remId: p.tagRemId, value: p.homeRootId }],
+        },
+        evidence.ancestorTails
+      );
+      if (ancestry.status === 'incomplete')
+        throw new TaskError(
+          'incomplete',
+          'HOME ancestry requires the unread ancestor tail',
+          p.tagRemId
+        );
       const daily = context.objects.find((o) => o.remId === p.dailyRemId),
         home = context.objects.find((o) => o.remId === p.homeRootId),
         tag = context.objects.find((o) => o.remId === p.tagRemId);
@@ -660,13 +678,10 @@ export class TaskOperations {
         for (const sibling of siblings) {
           if (sibling._id === own) continue;
           const texts = [sibling.text, ...(await sibling.getAliases()).map((a) => a.text)];
-          if (
-            texts.some((text) =>
-              choices.includes(
-                normalize((text ?? []).filter((t) => typeof t === 'string').join(''))
-              )
-            )
-          )
+          const rendered = await Promise.all(
+            texts.map((text) => plainText(this.deps.plugin, text))
+          );
+          if (rendered.some((text) => choices.includes(normalize(text))))
             throw new TaskError(
               'conflict',
               'Canonical name or alias already exists; use exact page ID',

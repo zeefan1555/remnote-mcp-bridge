@@ -466,6 +466,7 @@ class BridgeRuntimeController implements BridgeRuntime {
           targetId: payload.targetId as string | undefined,
           args: payload.args as unknown[] | undefined,
           allowDestructive: payload.allowDestructive as boolean | undefined,
+          expectedCatalogHash: payload.expectedCatalogHash as string | undefined,
         });
 
       case 'update_note': {

@@ -35,6 +35,19 @@ function fixture() {
     return r;
   }
   const plugin = {
+    richText: {
+      toString: vi.fn(async (text: unknown[]) =>
+        text
+          .map((part) =>
+            typeof part === 'string'
+              ? part
+              : part && typeof part === 'object' && 'text' in part && typeof part.text === 'string'
+                ? part.text
+                : ''
+          )
+          .join('')
+      ),
+    },
     rem: {
       findOne: vi.fn(async (id: string) => nodes.get(id)),
       findMany: vi.fn(async (ids: string[]) => ids.map((id) => nodes.get(id)).filter(Boolean)),
@@ -231,5 +244,102 @@ describe('bounded inspection receipts', () => {
         expectations: [],
       })
     ).toThrow();
+  });
+  it('distinguishes observed ancestors, unread tails and definite root-ended failures', async () => {
+    const { make, plugin } = fixture();
+    make('a0');
+    for (let i = 1; i <= 22; i++) make(`a${i}`, `a${i - 1}`);
+    const inspect = { schemaVersion: 1 as const, remIds: ['a22'] };
+    const bounded = await verifyScope(plugin as never, {
+      schemaVersion: 1,
+      inspect,
+      expectations: [{ kind: 'remType', remId: 'a22', value: 'text' }],
+    });
+    expect(bounded.status).toBe('passed');
+    expect(bounded.complete).toBe(true);
+    expect(bounded.objects[0].ancestorRemIds).toHaveLength(20);
+    const observed = await verifyScope(plugin as never, {
+      schemaVersion: 1,
+      inspect,
+      expectations: [{ kind: 'ancestor', remId: 'a22', value: 'a5' }],
+    });
+    expect(observed.status).toBe('passed');
+    const beyond = await verifyScope(plugin as never, {
+      schemaVersion: 1,
+      inspect,
+      expectations: [
+        { kind: 'ancestor', remId: 'a22', value: 'a0' },
+        { kind: 'remType', remId: 'a22', value: 'text' },
+      ],
+    });
+    expect(beyond.status).toBe('incomplete');
+    expect(beyond.complete).toBe(false);
+    expect(beyond.truncation).toEqual({ reason: 'ancestorDepth', remainingRemIds: ['a1'] });
+    expect(beyond.checks.map((c) => c.status)).toEqual(['incomplete', 'passed']);
+    const absent = await verifyScope(plugin as never, {
+      schemaVersion: 1,
+      inspect: { schemaVersion: 1, remIds: ['a2'] },
+      expectations: [{ kind: 'ancestor', remId: 'a2', value: 'other' }],
+    });
+    expect(absent.status).toBe('failed');
+    expect(absent.complete).toBe(true);
+    expect(absent.truncation).toBeNull();
+  });
+  it('keeps depth-zero entity proof and concurrent ancestor evidence independent', async () => {
+    const { make, plugin } = fixture();
+    make('root');
+    make('leaf', 'root');
+    const [noAncestry, missingProof, positive] = await Promise.all([
+      verifyScope(plugin as never, {
+        schemaVersion: 1,
+        inspect: { schemaVersion: 1, subtreeRootIds: ['leaf'], ancestorDepth: 0 },
+        expectations: [{ kind: 'zeroCards', remId: 'leaf' }],
+      }),
+      verifyScope(plugin as never, {
+        schemaVersion: 1,
+        inspect: { schemaVersion: 1, subtreeRootIds: ['leaf'], ancestorDepth: 0 },
+        expectations: [
+          { kind: 'ancestor', remId: 'leaf', value: 'root' },
+          { kind: 'zeroCards', remId: 'leaf' },
+        ],
+      }),
+      verifyScope(plugin as never, {
+        schemaVersion: 1,
+        inspect: { schemaVersion: 1, remIds: ['leaf'], ancestorDepth: 1 },
+        expectations: [{ kind: 'ancestor', remId: 'leaf', value: 'root' }],
+      }),
+    ]);
+    expect(noAncestry.status).toBe('passed');
+    expect(noAncestry.complete).toBe(true);
+    expect(noAncestry.objects[0].ancestorRemIds).toEqual([]);
+    expect(noAncestry.truncation).toBeNull();
+    expect(missingProof.status).toBe('incomplete');
+    expect(missingProof.checks.map((c) => c.status)).toEqual(['incomplete', 'passed']);
+    expect(positive.status).toBe('passed');
+    expect(positive.objects[0].ancestorRemIds).toEqual(['root']);
+  });
+  it('projects supported formatted titles and aliases with the SDK plain-text renderer', async () => {
+    const { make, plugin } = fixture();
+    const r = make('page'),
+      a = make('alias');
+    r.text = [{ i: 'm', text: 'Formatted title', b: true }];
+    a.text = [{ i: 'm', text: 'Page', l: true }];
+    r.getAliases.mockResolvedValue([a]);
+    const out = await inspectMany(plugin as never, { schemaVersion: 1, remIds: ['page'] });
+    expect(out.complete).toBe(true);
+    expect(out.objects[0].title).toBe('Formatted title');
+    expect(out.objects[0].aliases).toEqual(['Page']);
+    expect(out.objects[0].text).toEqual(r.text);
+  });
+  it.each(['throws', 'malformed'])('fails closed when SDK name rendering %s', async (kind) => {
+    const { make, plugin } = fixture();
+    make('r');
+    if (kind === 'throws')
+      plugin.richText.toString.mockRejectedValue(new Error('render unavailable'));
+    else plugin.richText.toString.mockResolvedValue(null as never);
+    const out = await inspectMany(plugin as never, { schemaVersion: 1, remIds: ['r'] });
+    expect(out.complete).toBe(false);
+    expect(out.objects).toEqual([]);
+    expect(out.errors[0].code).toBe('inspection_failed');
   });
 });

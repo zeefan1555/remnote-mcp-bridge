@@ -9,6 +9,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.24.0] - 2026-10-02
 
+### Fixed
+
+- Preserve expected catalog hash through production SDK dispatch, distinguish unread
+  ancestor tails from proven relationship failures, and retain formatted native alias
+  names in both context projection and deterministic Wiki duplicate guards.
+
 ### Added
 
 - Bounded context/verification actions with explicit content projection, strict inverse tag

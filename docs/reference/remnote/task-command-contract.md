@@ -11,13 +11,21 @@ The maintained CLI/server schemas and leaf `--help` give complete JSON examples.
 
 A context request has `schemaVersion:1` and at least one selector: `remIds` (100),
 `subtreeRootIds` (10), `tagRemIds` (10). `maxRems` is 1–1000 (default 1000,
-including ancestors); `ancestorDepth` is 0–20 (default 20). Entity descendants are
+including ancestors); `ancestorDepth` is 0–20 (default 20). Context returns the
+requested nearby-ancestor prefix; zero deliberately omits ancestor traversal.
+Verification preserves request-local unread-tail evidence: an observed ancestor can
+pass, a missing expected ancestor with unread tail is incomplete with an explicit
+ancestorDepth truncation, and only a chain that ended at its real root can prove a
+failed relationship. Complete unrelated entity-scope checks remain independent.
+No ancestor evidence is reused between requests. Entity descendants are
 followed, not references/portals. The initial exact IDs use SDK `findMany`.
 
 Only explicit `remIds` include title/raw text/back text/aliases and
 `contentIncluded:true`. Broad subtree and tag results omit prose. All objects
 contain identity, parent/ordered children/ancestors, type/structural card flags,
 strict tag IDs, references, cc/u flags, native card IDs/history and raw-text hash.
+Title/alias names use the SDK plain-text renderer, including supported formatting;
+rendering errors never become empty names or evidence that a name is unused.
 Empty raw SDK text serializes as null, with SHA256(JSON(null)). Metadata/content
 objects have a 1 MB output budget. Failed/missing/truncated reads are incomplete;
 SDK tag failures never become empty tags or prove absence. Inverse tag membership
