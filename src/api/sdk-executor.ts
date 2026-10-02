@@ -1,5 +1,9 @@
 import { Card, PluginRem, Query_DUPE_2, type ReactRNPlugin } from '@remnote/plugin-sdk';
-import { REMNOTE_SDK_VERSION, SDK_CAPABILITIES } from './sdk-capabilities.generated';
+import {
+  REMNOTE_SDK_VERSION,
+  SDK_CAPABILITIES,
+  SDK_CATALOG_HASH,
+} from './sdk-capabilities.generated';
 
 export type SdkCapability = (typeof SDK_CAPABILITIES)[number];
 
@@ -8,10 +12,12 @@ export interface SdkCallParams {
   targetId?: string;
   args?: unknown[];
   allowDestructive?: boolean;
+  expectedCatalogHash?: string;
 }
 
 export interface SdkCapabilitiesResult {
   sdkVersion: string;
+  sdkCatalogHash: string;
   capabilities: SdkCapability[];
 }
 
@@ -253,8 +259,21 @@ async function resolveSdkArgument(
 export function getSdkCapabilities(): SdkCapabilitiesResult {
   return {
     sdkVersion: REMNOTE_SDK_VERSION,
+    sdkCatalogHash: SDK_CATALOG_HASH,
     capabilities: SDK_CAPABILITIES.map((entry) => ({ ...entry })),
   };
+}
+
+function assertCatalogHash(expected: unknown): void {
+  if (
+    expected !== undefined &&
+    (typeof expected !== 'string' ||
+      !/^[a-f0-9]{64}$/.test(expected) ||
+      expected !== SDK_CATALOG_HASH)
+  )
+    throw new Error(
+      'SDK catalog hash changed or is invalid; refresh capabilities before invocation'
+    );
 }
 
 export async function executeSdkCall(
@@ -271,6 +290,7 @@ export async function executeSdkCall(
     throw new Error('sdk_call requires capability');
   }
 
+  assertCatalogHash(params.expectedCatalogHash);
   const capability = capabilityById.get(params.capability);
   if (!capability) throw new Error(`Unknown SDK capability: ${params.capability}`);
   if (FORBIDDEN_METHODS.has(capability.method)) {
@@ -320,6 +340,7 @@ export async function executeSdkCall(
     throw new Error(`SDK method is unavailable: ${capability.id}`);
   }
   const args = await resolveSdkArgument(plugin, params.args ?? []);
+  assertCatalogHash(params.expectedCatalogHash);
   const value = await Reflect.apply(method, target, args as unknown[]);
   return { capability: capability.id, value: serializeSdkValue(value) };
 }

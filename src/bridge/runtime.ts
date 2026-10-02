@@ -1,6 +1,8 @@
 declare const __PLUGIN_VERSION__: string;
 
 import { FocusEvents, SidebarEvents, type ReactRNPlugin, WindowEvents } from '@remnote/plugin-sdk';
+import type { InspectManyParams, VerifyScopeParams } from '../api/inspection';
+import type { TaskApplyParams, FlashcardsPlan, WikiPlan } from '../api/task-operations';
 import { RemAdapter } from '../api/rem-adapter';
 import {
   type BridgeRequest,
@@ -302,6 +304,15 @@ class BridgeRuntimeController implements BridgeRuntime {
     this.addLog(`Received action: ${request.action}`, 'info');
 
     switch (request.action) {
+      case 'inspect_many':
+        return this.adapter.inspectMany(payload as unknown as InspectManyParams);
+      case 'verify_scope':
+        return this.adapter.verifyScope(payload as unknown as VerifyScopeParams);
+      case 'flashcards_apply':
+        return this.adapter.applyFlashcards(payload as unknown as TaskApplyParams<FlashcardsPlan>);
+      case 'wiki_apply':
+        return this.adapter.applyWiki(payload as unknown as TaskApplyParams<WikiPlan>);
+
       case 'create_note': {
         const result = await this.adapter.createNote({
           title: payload.title as string | undefined,
@@ -455,6 +466,7 @@ class BridgeRuntimeController implements BridgeRuntime {
           targetId: payload.targetId as string | undefined,
           args: payload.args as unknown[] | undefined,
           allowDestructive: payload.allowDestructive as boolean | undefined,
+          expectedCatalogHash: payload.expectedCatalogHash as string | undefined,
         });
 
       case 'update_note': {
