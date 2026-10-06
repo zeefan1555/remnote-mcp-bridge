@@ -144,7 +144,7 @@ describe('public task operation controls', () => {
     success(first);
     expect(first.ids.daily).toBe('daily');
     expect(first.facts.find((v) => v.remId === first.ids['card:a'])?.cardIds).toHaveLength(1);
-    expect(await (await rem(f, first.ids.root)).hasPowerup('cc')).toBe(true);
+    expect(await (await rem(f, first.ids.root)).hasPowerup('cc')).toBe(false);
     const creations = f.plugin.rem.createTreeWithMarkdown.mock.calls.length;
     const replay = await adapter(f.plugin).applyFlashcards(request(plan));
     success(replay);
@@ -153,6 +153,47 @@ describe('public task operation controls', () => {
     expect(f.plugin.rem.createTreeWithMarkdown).toHaveBeenCalledTimes(creations);
     expect(f.plugin.date.getDailyDoc).not.toHaveBeenCalled();
     expect(f.plugin.date.getTodaysDoc).not.toHaveBeenCalled();
+  });
+  it('leaves multi-card themes without Card Cluster unless cardCluster is true', async () => {
+    const f = await fixture();
+    const power = vi.spyOn(MockRem.prototype, 'addPowerup');
+    const omitted = await f.adapter.applyFlashcards(request(flashPlan(), 'omit'));
+    success(omitted);
+    expect(await (await rem(f, omitted.ids.root)).hasPowerup('cc')).toBe(false);
+    const explicitOff = { ...flashPlan(), cardCluster: false as const };
+    const off = await f.adapter.applyFlashcards(request(explicitOff, 'off'));
+    success(off);
+    expect(await (await rem(f, off.ids.root)).hasPowerup('cc')).toBe(false);
+    expect(power.mock.calls.filter((call) => call[0] === 'cc')).toEqual([]);
+    const optedIn = { ...flashPlan(), cardCluster: true as const };
+    const on = await f.adapter.applyFlashcards(request(optedIn, 'on'));
+    success(on);
+    expect(await (await rem(f, on.ids.root)).hasPowerup('cc')).toBe(true);
+    expect(power).toHaveBeenCalledWith('cc');
+    power.mockClear();
+    const replay = await adapter(f.plugin).applyFlashcards(request(optedIn, 'on'));
+    success(replay);
+    expect(replay.ids).toEqual(on.ids);
+    expect(await (await rem(f, replay.ids.root)).hasPowerup('cc')).toBe(true);
+    expect(power).not.toHaveBeenCalled();
+  });
+  it('rejects cardCluster without two new cards before any mutation', async () => {
+    const f = await fixture();
+    const one = {
+      ...flashPlan(),
+      cardCluster: true as const,
+      newCards: [flashPlan().newCards![0]],
+    };
+    await expect(f.adapter.applyFlashcards(request(one))).rejects.toThrow(
+      'Card Cluster requires two or more new cards'
+    );
+    await expect(
+      f.adapter.applyFlashcards(
+        request({ ...flashPlan(), cardCluster: 'yes' } as unknown as FlashcardsPlan)
+      )
+    ).rejects.toThrow('Invalid cardCluster');
+    expect(f.plugin.storage.setLocal).not.toHaveBeenCalled();
+    expect(f.plugin.rem.createTreeWithMarkdown).not.toHaveBeenCalled();
   });
   it('applies Wiki native references and cross-page summaries without confusing index ownership', async () => {
     const f = await fixture();
@@ -422,6 +463,7 @@ describe('durable journal and bounded recovery', () => {
     async (drift) => {
       const f = await fixture();
       const p = flashPlan();
+      if (drift === 'cc') p.cardCluster = true;
       const first = await f.adapter.applyFlashcards(request(p));
       success(first);
       const root = await rem(f, first.ids.root);
@@ -513,7 +555,7 @@ describe('live write gates after awaited reads', () => {
       return result;
     });
     const setter = vi.spyOn(MockRem.prototype, 'addPowerup');
-    const result = await f.adapter.applyFlashcards(request(flashPlan()));
+    const result = await f.adapter.applyFlashcards(request({ ...flashPlan(), cardCluster: true }));
     expect(result.status).not.toBe('verified');
     expect(setter).not.toHaveBeenCalled();
   });

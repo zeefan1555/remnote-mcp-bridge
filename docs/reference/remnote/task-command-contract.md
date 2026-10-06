@@ -57,7 +57,9 @@ The matching server timeout is 60 seconds; transport timeout is an uncertain out
 
 Flashcards use explicit existing `dailyRemId`, `homeRootId`, `tagRemId`, up to seven
 newCards and/or exact existing answer patches/reused cards. Two or more new cards
-require a title and receive cc on an ordinary topic root. The daily target must be
+require a title on an ordinary topic root. Card Cluster (`cc`) is opt-in: set plan
+`cardCluster` to true to add that powerup, which also requires the title and at least
+two new cards. Omitted and false never add `cc`. The daily target must be
 native dailyDocument; ID/type alone does not prove calendar freshness. The caller
 resolves and verifies the intended day and re-resolves a new batch after midnight.
 Replay retains the original target. Composite preview/apply makes no date call.
