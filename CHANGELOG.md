@@ -7,6 +7,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `flashcards_apply` no longer adds the Card Cluster (`cc`) powerup on multi-card themes.
+  Set plan `cardCluster` to `true` to opt in. Omitted and `false` leave the topic root without `cc`.
+
 ## [0.24.0] - 2026-10-02
 
 ### Fixed

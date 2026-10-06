@@ -28,6 +28,7 @@ export interface FlashcardsPlan {
   homeRootId: string;
   tagRemId: string;
   title?: string;
+  cardCluster?: boolean;
   newCards?: Array<{ key: string; question: string; answer: TextSegment[][] }>;
   answerPatches?: AnswerPatch[];
   reusedCardRemIds?: string[];
@@ -193,6 +194,7 @@ export function validateTaskPlan(
       'homeRootId',
       'tagRemId',
       'title',
+      'cardCluster',
       'newCards',
       'answerPatches',
       'reusedCardRemIds',
@@ -200,6 +202,8 @@ export function validateTaskPlan(
     const plan = p as FlashcardsPlan;
     [plan.dailyRemId, plan.homeRootId, plan.tagRemId].forEach((v) => string(v));
     if (plan.title !== undefined) string(plan.title, 1000);
+    if (plan.cardCluster !== undefined && typeof plan.cardCluster !== 'boolean')
+      throw new Error('Invalid cardCluster');
     if (plan.newCards !== undefined) {
       array(plan.newCards, 7);
       if (plan.newCards.length > 1 && !plan.title) throw new Error('Cluster title required');
@@ -219,6 +223,8 @@ export function validateTaskPlan(
     }
     if (!(plan.newCards?.length || plan.answerPatches?.length || plan.reusedCardRemIds?.length))
       throw new Error('Empty task');
+    if (plan.cardCluster === true && (plan.newCards?.length ?? 0) < 2)
+      throw new Error('Card Cluster requires two or more new cards');
     count +=
       2 +
       (plan.newCards && plan.newCards.length > 1 ? 1 : 0) +
@@ -1083,7 +1089,7 @@ export class TaskOperations {
       }
       if (cards.length > 1) {
         await this.createdText(bound.root._id, [p.title!], j, save);
-        if (!(await bound.root.hasPowerup('cc'))) {
+        if (p.cardCluster === true && !(await bound.root.hasPowerup('cc'))) {
           if (j.completed)
             throw new TaskError('conflict', 'Completed cluster powerup changed', bound.root._id);
           const r = await this.rem(bound.root._id);
@@ -1112,10 +1118,9 @@ export class TaskOperations {
         { kind: 'cardRemIds', remId: bound.root._id, value: bound.cards.map((r) => r._id) },
       ];
       if (cards.length > 1)
-        expectations.push(
-          { kind: 'remType', remId: bound.root._id, value: 'text' },
-          { kind: 'powerup', remId: bound.root._id, code: 'cc', value: true }
-        );
+        expectations.push({ kind: 'remType', remId: bound.root._id, value: 'text' });
+      if (cards.length > 1 && p.cardCluster === true)
+        expectations.push({ kind: 'powerup', remId: bound.root._id, code: 'cc', value: true });
       const verified = await verifyScope(this.deps.plugin, {
         schemaVersion: 1,
         inspect: {
